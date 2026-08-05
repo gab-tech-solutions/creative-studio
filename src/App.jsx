@@ -418,13 +418,14 @@ export default function AgencyPM() {
     if (type === "activation") { setOpenProjectId(p.id); setView("projects"); setProjTab("budget"); }
   };
 
-  const addTask = (andClose) => {
+  const addTask = () => {
     if (!form.title || !form.projectId) return;
     setTasks((ts) => [...ts, { id: uid(), title: form.title, projectId: form.projectId, assignee: form.assignee || team[0].id, status: "briefing", due: form.due || "" }]);
     setTaskAdded((n) => n + 1);
-    if (andClose) { setModal(null); setTaskAdded(0); }
-    else setForm((f) => ({ ...f, title: "", due: "" })); // clear title & due, keep project & assignee
+    setForm((f) => ({ ...f, _saved: true })); // triggers the "add another?" prompt
   };
+  const taskAddAnother = () => setForm((f) => ({ ...f, title: "", due: "", _saved: false }));
+  const taskDone = () => { setModal(null); setTaskAdded(0); };
 
   const addClient = () => {
     if (!form.name) return;
@@ -1318,36 +1319,52 @@ export default function AgencyPM() {
 
       {modal === "task" && (
         <Modal title="New task" onClose={() => { setModal(null); setTaskAdded(0); }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-            {taskAdded > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#15803D" }}>
-                <CheckCircle2 size={15} /> {taskAdded} task{taskAdded > 1 ? "s" : ""} added — add another below or click Done
+          {form._saved ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "20px 0" }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle2 size={28} color="#16A34A" />
               </div>
-            )}
-            <div><label style={labelStyle}>Task</label>
-              <input style={inputStyle} value={form.title || ""} onChange={set("title")} placeholder="e.g., Finalize booth KV" autoFocus /></div>
-            <div><label style={labelStyle}>Project</label>
-              <select style={inputStyle} value={form.projectId || ""} onChange={set("projectId")}>
-                <option value="">Select project…</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{clientById(p.clientId)?.name} — {p.name}</option>)}
-              </select></div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Assignee</label>
-                <select style={inputStyle} value={form.assignee || team[0].id} onChange={set("assignee")}>
-                  {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>Task added!</div>
+                <div style={{ fontSize: 13.5, color: T.textDim, marginTop: 4 }}>
+                  {taskAdded} task{taskAdded > 1 ? "s" : ""} added to <b>{projectById(form.projectId)?.name}</b>
+                </div>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Add another task to this project?</div>
+              <div style={{ display: "flex", gap: 12, width: "100%" }}>
+                <button style={{ ...btnPrimary, flex: 1, justifyContent: "center", background: T.inkSoft }} onClick={taskDone}>
+                  No, I'm done
+                </button>
+                <button style={{ ...btnPrimary, flex: 1, justifyContent: "center" }} onClick={taskAddAnother}>
+                  <Plus size={14} /> Yes, add another
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+              {taskAdded > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#15803D" }}>
+                  <CheckCircle2 size={15} /> {taskAdded} task{taskAdded > 1 ? "s" : ""} added so far
+                </div>
+              )}
+              <div><label style={labelStyle}>Task</label>
+                <input style={inputStyle} value={form.title || ""} onChange={set("title")} placeholder="e.g., Finalize booth KV" autoFocus /></div>
+              <div><label style={labelStyle}>Project</label>
+                <select style={inputStyle} value={form.projectId || ""} onChange={set("projectId")}>
+                  <option value="">Select project…</option>
+                  {projects.map((p) => <option key={p.id} value={p.id}>{clientById(p.clientId)?.name} — {p.name}</option>)}
                 </select></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Due date</label>
-                <input style={inputStyle} type="date" value={form.due || ""} onChange={set("due")} /></div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={labelStyle}>Assignee</label>
+                  <select style={inputStyle} value={form.assignee || team[0].id} onChange={set("assignee")}>
+                    {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select></div>
+                <div style={{ flex: 1 }}><label style={labelStyle}>Due date</label>
+                  <input style={inputStyle} type="date" value={form.due || ""} onChange={set("due")} /></div>
+              </div>
+              <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addTask}>Add task</button>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button style={{ ...btnPrimary, flex: 1, justifyContent: "center", background: T.inkSoft }} onClick={() => addTask(false)}>
-                <Plus size={14} /> Add & add another
-              </button>
-              <button style={{ ...btnPrimary, flex: 1, justifyContent: "center" }} onClick={() => addTask(true)}>
-                {taskAdded > 0 ? "Done" : "Add task"}
-              </button>
-            </div>
-          </div>
+          )}
         </Modal>
       )}
 
