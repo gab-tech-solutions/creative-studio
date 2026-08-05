@@ -3,7 +3,7 @@ import {
   LayoutGrid, Kanban, Users, Plus, Search, ChevronLeft, ChevronRight, ArrowLeft,
   CalendarDays, CircleDollarSign, Briefcase, Clock, X, Trash2, Megaphone,
   MapPin, Truck, HardHat, ClipboardCheck, BarChart3, FolderKanban, CheckCircle2, Circle,
-  Cloud, CloudOff, RotateCcw, Receipt, Send, Zap
+  Cloud, CloudOff, RotateCcw, Receipt, Send, Zap, Lock, UserPlus, LogOut, Shield, Eye, EyeOff
 } from "lucide-react";
 
 // ---------- Design tokens ----------
@@ -177,6 +177,102 @@ const seedBundle = () => ({
   invoices: seedInvoices,
 });
 
+// ---------- Auth storage (separate key so board data stays clean) ----------
+const AUTH_KEY = "agency-pm:users:v1";
+const SESSION_KEY = "agency-pm:session";
+const ROLES = ["Admin", "Manager", "Staff"];
+
+const seedUsers = [
+  { id: "u0", username: "admin", password: "admin123", name: "Admin", role: "Admin", active: true },
+];
+
+const authRead = async (mode) => {
+  if (mode === "claude") {
+    try { const res = await window.storage.get(AUTH_KEY, true); return res ? res.value : null; } catch (e) { return null; }
+  }
+  if (mode === "local") return window.localStorage.getItem(AUTH_KEY);
+  return null;
+};
+const authWrite = async (mode, json) => {
+  if (mode === "claude") { try { await window.storage.set(AUTH_KEY, json, true); return true; } catch (e) { return false; } }
+  if (mode === "local") { window.localStorage.setItem(AUTH_KEY, json); return true; }
+  return false;
+};
+const sessionRead = () => { try { return JSON.parse(window.sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } };
+const sessionWrite = (user) => { try { window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch (e) {} };
+const sessionClear = () => { try { window.sessionStorage.removeItem(SESSION_KEY); } catch (e) {} };
+
+// ---------- Login page ----------
+const LoginPage = ({ onLogin, error }) => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const handleSubmit = (e) => { e.preventDefault(); onLogin(username, password); };
+  return (
+    <div style={{
+      minHeight: "100vh", background: "linear-gradient(145deg, #1B1E2A 0%, #2D3250 100%)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      fontFamily: "'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif",
+    }}>
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 16, background: "#4038EF",
+            display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14,
+          }}>
+            <Megaphone size={28} color="#fff" />
+          </div>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#fff" }}>Creative Studio</h1>
+          <p style={{ margin: "6px 0 0", fontSize: 14, color: "#8A90A4" }}>Agency Project Management</p>
+        </div>
+        <div style={{
+          background: "#fff", borderRadius: 16, padding: 28,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 20 }}>
+            <Lock size={18} color="#4038EF" />
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#1B1E2A" }}>Sign in</h2>
+          </div>
+          {error && (
+            <div style={{ padding: "9px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#B91C1C", marginBottom: 14 }}>
+              {error}
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: "#6B7180", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.6 }}>Username</label>
+              <input value={username} onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username" autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
+                style={{ width: "100%", boxSizing: "border-box", padding: "11px 14px", fontSize: 14, border: "1px solid #E3E7EE", borderRadius: 9, outline: "none", background: "#FBFCFE", color: "#1B1E2A" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: "#6B7180", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.6 }}>Password</label>
+              <div style={{ position: "relative" }}>
+                <input value={password} onChange={(e) => setPassword(e.target.value)}
+                  type={showPw ? "text" : "password"} placeholder="Enter your password"
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "11px 40px 11px 14px", fontSize: 14, border: "1px solid #E3E7EE", borderRadius: 9, outline: "none", background: "#FBFCFE", color: "#1B1E2A" }} />
+                <button onClick={() => setShowPw(!showPw)} style={{
+                  position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", cursor: "pointer", color: "#6B7180", display: "flex", padding: 4,
+                }}>{showPw ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+              </div>
+            </div>
+            <button onClick={handleSubmit} style={{
+              width: "100%", background: "#4038EF", color: "#fff", border: "none", borderRadius: 9,
+              padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4,
+            }}>Sign in</button>
+          </div>
+          <div style={{ marginTop: 16, padding: "10px 12px", background: "#F3F5F8", borderRadius: 9, fontSize: 12, color: "#6B7180" }}>
+            <b>Default login:</b> admin / admin123
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ---------- Helpers ----------
 const uid = () => Math.random().toString(36).slice(2, 9);
 const money = (n) => "$" + Number(n || 0).toLocaleString();
@@ -285,6 +381,85 @@ const Modal = ({ title, onClose, children }) => (
 
 // ---------- Main app ----------
 export default function AgencyPM() {
+  // ---------- Auth ----------
+  const [currentUser, setCurrentUser] = useState(null); // logged-in user object
+  const [users, setUsers] = useState(seedUsers);
+  const [authLoaded, setAuthLoaded] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authStorageMode, setAuthStorageMode] = useState("none");
+
+  // Load users from storage on mount, restore session
+  useEffect(() => {
+    (async () => {
+      const mode = detectStorageMode();
+      setAuthStorageMode(mode);
+      if (mode !== "none") {
+        try {
+          const raw = await authRead(mode);
+          if (raw) setUsers(JSON.parse(raw));
+          else await authWrite(mode, JSON.stringify(seedUsers));
+        } catch (e) {
+          try { await authWrite(mode, JSON.stringify(seedUsers)); } catch (e2) {}
+        }
+      }
+      // Restore session
+      const sess = sessionRead();
+      if (sess) setCurrentUser(sess);
+      setAuthLoaded(true);
+    })();
+  }, []);
+
+  // Save users whenever they change
+  useEffect(() => {
+    if (!authLoaded || authStorageMode === "none") return;
+    authWrite(authStorageMode, JSON.stringify(users));
+  }, [users, authLoaded, authStorageMode]);
+
+  const handleLogin = (username, password) => {
+    const u = users.find((x) => x.username.toLowerCase() === username.toLowerCase() && x.password === password && x.active);
+    if (!u) { setAuthError("Invalid username or password."); return; }
+    setAuthError("");
+    const sess = { id: u.id, username: u.username, name: u.name, role: u.role };
+    setCurrentUser(sess);
+    sessionWrite(sess);
+  };
+
+  const handleLogout = () => { setCurrentUser(null); sessionClear(); };
+
+  const isAdmin = currentUser?.role === "Admin";
+
+  const addUser = () => {
+    if (!form.username || !form.password || !form.name) return;
+    if (users.some((u) => u.username.toLowerCase() === form.username.toLowerCase())) {
+      alert("Username already taken."); return;
+    }
+    setUsers((us) => [...us, {
+      id: uid(), username: form.username, password: form.password,
+      name: form.name, role: form.role || "Staff", active: true,
+    }]);
+    setModal(null);
+  };
+  const toggleUserActive = (id) => setUsers((us) => us.map((u) => u.id === id ? { ...u, active: !u.active } : u));
+  const deleteUser = (id) => { if (id === currentUser?.id) return; setUsers((us) => us.filter((u) => u.id !== id)); };
+  const resetUserPassword = (id, newPw) => { if (!newPw) return; setUsers((us) => us.map((u) => u.id === id ? { ...u, password: newPw } : u)); };
+
+  // Show login before anything else
+  if (!authLoaded) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#1B1E2A", display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif" }}>
+        <div style={{ color: "#8A90A4", fontSize: 14, fontWeight: 700 }}>Loading…</div>
+      </div>
+    );
+  }
+  if (!currentUser) return <LoginPage onLogin={handleLogin} error={authError} />;
+
+  // ---------- App state (post-login) ----------
+  return <Dashboard currentUser={currentUser} isAdmin={isAdmin} onLogout={handleLogout}
+    users={users} addUser={addUser} toggleUserActive={toggleUserActive} deleteUser={deleteUser} resetUserPassword={resetUserPassword} />;
+}
+
+function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserActive, deleteUser, resetUserPassword }) {
   const [view, setView] = useState("overview");
   const [openProjectId, setOpenProjectId] = useState(null);
   const [projTab, setProjTab] = useState("budget");
@@ -1166,6 +1341,80 @@ export default function AgencyPM() {
     );
   };
 
+  // ---------- User Management (Admin only) ----------
+  const UserManagement = () => (
+    <div>
+      <div style={{ ...cardStyle, marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 15 }}>
+            <Shield size={16} color={T.accent} /> User management
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textDim, marginTop: 3 }}>
+            {users.length} user{users.length !== 1 ? "s" : ""} · {users.filter((u) => u.active).length} active
+          </div>
+        </div>
+        <button style={btnPrimary} onClick={() => openModal("addUser")}>
+          <UserPlus size={14} /> Add user
+        </button>
+      </div>
+      <div style={cardStyle}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 580 }}>
+            <thead><tr>
+              <th style={th}>User</th><th style={th}>Username</th>
+              <th style={th}>Role</th><th style={th}>Status</th><th style={th}>Actions</th>
+            </tr></thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} style={{ opacity: u.active ? 1 : 0.55 }}>
+                  <td style={td}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Avatar name={u.name} size={28} />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13.5 }}>{u.name}</div>
+                        {u.id === currentUser.id && <span style={{ fontSize: 10.5, fontWeight: 700, color: T.accent }}>(you)</span>}
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ ...td, fontFamily: "monospace", fontSize: 13 }}>{u.username}</td>
+                  <td style={td}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999,
+                      background: u.role === "Admin" ? "#ECEBFE" : u.role === "Manager" ? "#FEF3C7" : "#F0F2F6",
+                      color: u.role === "Admin" ? "#4038EF" : u.role === "Manager" ? "#92400E" : T.textDim,
+                    }}>{u.role}</span>
+                  </td>
+                  <td style={td}>
+                    <button onClick={() => { if (u.id !== currentUser.id) toggleUserActive(u.id); }}
+                      disabled={u.id === currentUser.id}
+                      style={{
+                        fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999, cursor: u.id === currentUser.id ? "default" : "pointer",
+                        border: "none", background: u.active ? "#ECFDF5" : "#FEF2F2", color: u.active ? "#15803D" : "#B91C1C",
+                      }}>
+                      {u.active ? "Active" : "Disabled"}
+                    </button>
+                  </td>
+                  <td style={{ ...td, whiteSpace: "nowrap" }}>
+                    <button style={{ ...btnGhost, fontSize: 12, fontWeight: 700, marginRight: 5 }}
+                      onClick={() => { const pw = prompt("Enter new password for " + u.name + ":"); resetUserPassword(u.id, pw); }}
+                      title="Reset password">
+                      <Lock size={12} /> Reset PW
+                    </button>
+                    {u.id !== currentUser.id && (
+                      <button style={{ ...btnGhost, padding: "3px 5px" }} onClick={() => deleteUser(u.id)} aria-label="Delete user">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   // ---------- Nav ----------
   const NavBtn = ({ id, icon: Icon, label }) => (
     <button onClick={() => { setView(id); setOpenProjectId(null); }} style={{
@@ -1213,6 +1462,7 @@ export default function AgencyPM() {
         <NavBtn id="board" icon={Kanban} label="Task board" />
         <NavBtn id="clients" icon={Users} label="Clients" />
         <NavBtn id="billing" icon={Receipt} label="Billing" />
+        {isAdmin && <NavBtn id="users" icon={Shield} label="Users" />}
         <div style={{ marginTop: "auto", padding: "14px 8px 4px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ color: "#8A90A4", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Team</div>
           {team.map((m) => (
@@ -1241,6 +1491,19 @@ export default function AgencyPM() {
             }}>
               <RotateCcw size={12} /> {resetArm ? "Click again to confirm reset" : "Reset board to sample data"}
             </button>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 8 }}>
+              <Avatar name={currentUser.name} size={26} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: "#E7E9F0", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
+                <div style={{ color: "#8A90A4", fontSize: 10.5 }}>{currentUser.role}</div>
+              </div>
+              <button onClick={onLogout} title="Sign out" style={{
+                background: "none", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 7,
+                padding: "5px 6px", cursor: "pointer", color: "#A6ACBE", display: "flex",
+              }}>
+                <LogOut size={13} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -1250,7 +1513,7 @@ export default function AgencyPM() {
         {!openProject && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
             <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: -0.3 }}>
-              {view === "overview" ? "Overview" : view === "board" ? "Task board" : view === "projects" ? "Projects" : view === "billing" ? "Billing" : "Clients"}
+              {view === "overview" ? "Overview" : view === "board" ? "Task board" : view === "projects" ? "Projects" : view === "billing" ? "Billing" : view === "users" ? "Users" : "Clients"}
             </h1>
             <div style={{ flex: 1 }} />
             <div style={{ position: "relative" }}>
@@ -1261,8 +1524,8 @@ export default function AgencyPM() {
               <option value="all">All clients</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button style={btnPrimary} onClick={() => openModal(view === "board" ? "task" : view === "billing" ? "invoice" : "project")}>
-              <Plus size={15} /> {view === "board" ? "New task" : view === "billing" ? "New invoice" : "New project"}
+            <button style={btnPrimary} onClick={() => openModal(view === "board" ? "task" : view === "billing" ? "invoice" : view === "users" ? "addUser" : "project")}>
+              <Plus size={15} /> {view === "board" ? "New task" : view === "billing" ? "New invoice" : view === "users" ? "Add user" : "New project"}
             </button>
           </div>
         )}
@@ -1274,6 +1537,7 @@ export default function AgencyPM() {
             {view === "projects" && <ProjectsList />}
             {view === "clients" && <Clients />}
             {view === "billing" && <Billing />}
+            {view === "users" && isAdmin && <UserManagement />}
           </>
         )}
       </main>
@@ -1477,6 +1741,31 @@ export default function AgencyPM() {
             <div><label style={labelStyle}>Item</label>
               <input style={inputStyle} value={form.label || ""} onChange={set("label")} placeholder="e.g., Secure fire safety clearance" autoFocus /></div>
             <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addCheckItem}>Add item</button>
+          </div>
+        </Modal>
+      )}
+
+      {modal === "addUser" && (
+        <Modal title="Add user" onClose={() => setModal(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+            <div><label style={labelStyle}>Full name</label>
+              <input style={inputStyle} value={form.name || ""} onChange={set("name")} placeholder="e.g., Maria Santos" autoFocus /></div>
+            <div><label style={labelStyle}>Username</label>
+              <input style={inputStyle} value={form.username || ""} onChange={set("username")} placeholder="e.g., maria.santos" /></div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Password</label>
+                <input style={inputStyle} value={form.password || ""} onChange={set("password")} placeholder="Set a password" /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Role</label>
+                <select style={inputStyle} value={form.role || "Staff"} onChange={set("role")}>
+                  {ROLES.map((r) => <option key={r}>{r}</option>)}
+                </select></div>
+            </div>
+            <div style={{ fontSize: 12, color: T.textDim }}>
+              The user can sign in immediately with these credentials. Admins can manage users, reset passwords, and disable accounts.
+            </div>
+            <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addUser}>
+              <UserPlus size={14} /> Create user
+            </button>
           </div>
         </Modal>
       )}
