@@ -1332,11 +1332,11 @@ export default function AgencyPM() {
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Add another task to this project?</div>
               <div style={{ display: "flex", gap: 12, width: "100%" }}>
+                <button autoFocus style={{ ...btnPrimary, flex: 1, justifyContent: "center" }} onClick={taskAddAnother}>
+                  <Plus size={14} /> Yes, add another
+                </button>
                 <button style={{ ...btnPrimary, flex: 1, justifyContent: "center", background: T.inkSoft }} onClick={taskDone}>
                   No, I'm done
-                </button>
-                <button style={{ ...btnPrimary, flex: 1, justifyContent: "center" }} onClick={taskAddAnother}>
-                  <Plus size={14} /> Yes, add another
                 </button>
               </div>
             </div>
