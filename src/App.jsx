@@ -303,7 +303,7 @@ export default function AgencyPM() {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
-
+  const [taskAdded, setTaskAdded] = useState(0); // counts tasks added in current modal session
   // ---------- Storage sync ----------
   const [loaded, setLoaded] = useState(false);
   const [storageMode, setStorageMode] = useState("none"); // claude | local | none
@@ -372,7 +372,7 @@ export default function AgencyPM() {
       try { await storageWrite(storageMode, JSON.stringify(fresh)); } catch (e) { console.error(e); }
     }
   };
-  const openModal = (kind, preset = {}) => { setForm(preset); setModal(kind); };
+  const openModal = (kind, preset = {}) => { setForm(preset); setModal(kind); setTaskAdded(0); };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const clientById = (id) => clients.find((c) => c.id === id);
@@ -418,10 +418,12 @@ export default function AgencyPM() {
     if (type === "activation") { setOpenProjectId(p.id); setView("projects"); setProjTab("budget"); }
   };
 
-  const addTask = () => {
+  const addTask = (andClose) => {
     if (!form.title || !form.projectId) return;
     setTasks((ts) => [...ts, { id: uid(), title: form.title, projectId: form.projectId, assignee: form.assignee || team[0].id, status: "briefing", due: form.due || "" }]);
-    setModal(null);
+    setTaskAdded((n) => n + 1);
+    if (andClose) { setModal(null); setTaskAdded(0); }
+    else setForm((f) => ({ ...f, title: "", due: "" })); // clear title & due, keep project & assignee
   };
 
   const addClient = () => {
@@ -1315,8 +1317,13 @@ export default function AgencyPM() {
       )}
 
       {modal === "task" && (
-        <Modal title="New task" onClose={() => setModal(null)}>
+        <Modal title="New task" onClose={() => { setModal(null); setTaskAdded(0); }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+            {taskAdded > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#15803D" }}>
+                <CheckCircle2 size={15} /> {taskAdded} task{taskAdded > 1 ? "s" : ""} added — add another below or click Done
+              </div>
+            )}
             <div><label style={labelStyle}>Task</label>
               <input style={inputStyle} value={form.title || ""} onChange={set("title")} placeholder="e.g., Finalize booth KV" autoFocus /></div>
             <div><label style={labelStyle}>Project</label>
@@ -1332,7 +1339,14 @@ export default function AgencyPM() {
               <div style={{ flex: 1 }}><label style={labelStyle}>Due date</label>
                 <input style={inputStyle} type="date" value={form.due || ""} onChange={set("due")} /></div>
             </div>
-            <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addTask}>Add task</button>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ ...btnPrimary, flex: 1, justifyContent: "center", background: T.inkSoft }} onClick={() => addTask(false)}>
+                <Plus size={14} /> Add & add another
+              </button>
+              <button style={{ ...btnPrimary, flex: 1, justifyContent: "center" }} onClick={() => addTask(true)}>
+                {taskAdded > 0 ? "Done" : "Add task"}
+              </button>
+            </div>
           </div>
         </Modal>
       )}
