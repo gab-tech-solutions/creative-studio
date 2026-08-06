@@ -180,11 +180,21 @@ const seedBundle = () => ({
 // ---------- Auth storage (separate key so board data stays clean) ----------
 const AUTH_KEY = "agency-pm:users:v1";
 const SESSION_KEY = "agency-pm:session";
+const COMPANY_KEY = "agency-pm:company:v1";
 const ROLES = ["Admin", "Manager", "Staff"];
 
 const seedUsers = [
-  { id: "u0", username: "admin", password: "admin123", name: "Admin", role: "Admin", active: true },
+  { id: "u0", username: "admin", password: "admin123", name: "Admin", role: "Admin", active: true, allowedClients: [] },
 ];
+
+const seedCompany = {
+  name: "Creative Studio",
+  tagline: "Agency Project Management",
+  email: "hello@creativestudio.example",
+  phone: "+63 917 000 0000",
+  address: "Unit 1205, BGC Corporate Center, Taguig City, Metro Manila",
+  website: "www.creativestudio.example",
+};
 
 const authRead = async (mode) => {
   if (mode === "claude") {
@@ -201,9 +211,19 @@ const authWrite = async (mode, json) => {
 const sessionRead = () => { try { return JSON.parse(window.sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } };
 const sessionWrite = (user) => { try { window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch (e) {} };
 const sessionClear = () => { try { window.sessionStorage.removeItem(SESSION_KEY); } catch (e) {} };
+const companyRead = async (mode) => {
+  if (mode === "claude") { try { const res = await window.storage.get(COMPANY_KEY, true); return res ? res.value : null; } catch (e) { return null; } }
+  if (mode === "local") return window.localStorage.getItem(COMPANY_KEY);
+  return null;
+};
+const companyWrite = async (mode, json) => {
+  if (mode === "claude") { try { await window.storage.set(COMPANY_KEY, json, true); return true; } catch (e) { return false; } }
+  if (mode === "local") { window.localStorage.setItem(COMPANY_KEY, json); return true; }
+  return false;
+};
 
 // ---------- Login page ----------
-const LoginPage = ({ onLogin, error }) => {
+const LoginPage = ({ onLogin, error, company }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -222,8 +242,8 @@ const LoginPage = ({ onLogin, error }) => {
           }}>
             <Megaphone size={28} color="#fff" />
           </div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#fff" }}>Creative Studio</h1>
-          <p style={{ margin: "6px 0 0", fontSize: 14, color: "#8A90A4" }}>Agency Project Management</p>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#fff" }}>{company.name || "Creative Studio"}</h1>
+          <p style={{ margin: "6px 0 0", fontSize: 14, color: "#8A90A4" }}>{company.tagline || "Agency Project Management"}</p>
         </div>
         <div style={{
           background: "#fff", borderRadius: 16, padding: 28,
@@ -275,7 +295,7 @@ const LoginPage = ({ onLogin, error }) => {
 
 // ---------- Helpers ----------
 const uid = () => Math.random().toString(36).slice(2, 9);
-const money = (n) => "$" + Number(n || 0).toLocaleString();
+const money = (n) => "₱" + Number(n || 0).toLocaleString();
 const fmtDate = (d) => {
   if (!d) return "—";
   return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -384,11 +404,12 @@ export default function AgencyPM() {
   // ---------- Auth ----------
   const [currentUser, setCurrentUser] = useState(null); // logged-in user object
   const [users, setUsers] = useState(seedUsers);
+  const [company, setCompany] = useState(seedCompany);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authStorageMode, setAuthStorageMode] = useState("none");
 
-  // Load users from storage on mount, restore session
+  // Load users + company from storage on mount, restore session
   useEffect(() => {
     (async () => {
       const mode = detectStorageMode();
@@ -401,6 +422,11 @@ export default function AgencyPM() {
         } catch (e) {
           try { await authWrite(mode, JSON.stringify(seedUsers)); } catch (e2) {}
         }
+        try {
+          const cRaw = await companyRead(mode);
+          if (cRaw) setCompany(JSON.parse(cRaw));
+          else await companyWrite(mode, JSON.stringify(seedCompany));
+        } catch (e) {}
       }
       // Restore session
       const sess = sessionRead();
@@ -414,6 +440,12 @@ export default function AgencyPM() {
     if (!authLoaded || authStorageMode === "none") return;
     authWrite(authStorageMode, JSON.stringify(users));
   }, [users, authLoaded, authStorageMode]);
+
+  // Save company whenever it changes
+  useEffect(() => {
+    if (!authLoaded || authStorageMode === "none") return;
+    companyWrite(authStorageMode, JSON.stringify(company));
+  }, [company, authLoaded, authStorageMode]);
 
   const handleLogin = (username, password) => {
     const u = users.find((x) => x.username.toLowerCase() === username.toLowerCase() && x.password === password && x.active);
@@ -436,12 +468,14 @@ export default function AgencyPM() {
     setUsers((us) => [...us, {
       id: uid(), username: form.username, password: form.password,
       name: form.name, role: form.role || "Staff", active: true,
+      allowedClients: form.allowedClients || [],
     }]);
     setModal(null);
   };
   const toggleUserActive = (id) => setUsers((us) => us.map((u) => u.id === id ? { ...u, active: !u.active } : u));
   const deleteUser = (id) => { if (id === currentUser?.id) return; setUsers((us) => us.filter((u) => u.id !== id)); };
   const resetUserPassword = (id, newPw) => { if (!newPw) return; setUsers((us) => us.map((u) => u.id === id ? { ...u, password: newPw } : u)); };
+  const updateUserClients = (id, clientIds) => setUsers((us) => us.map((u) => u.id === id ? { ...u, allowedClients: clientIds } : u));
 
   // Show login before anything else
   if (!authLoaded) {
@@ -452,14 +486,16 @@ export default function AgencyPM() {
       </div>
     );
   }
-  if (!currentUser) return <LoginPage onLogin={handleLogin} error={authError} />;
+  if (!currentUser) return <LoginPage onLogin={handleLogin} error={authError} company={company} />;
 
   // ---------- App state (post-login) ----------
   return <Dashboard currentUser={currentUser} isAdmin={isAdmin} onLogout={handleLogout}
-    users={users} addUser={addUser} toggleUserActive={toggleUserActive} deleteUser={deleteUser} resetUserPassword={resetUserPassword} />;
+    users={users} addUser={addUser} toggleUserActive={toggleUserActive} deleteUser={deleteUser}
+    resetUserPassword={resetUserPassword} updateUserClients={updateUserClients}
+    company={company} setCompany={setCompany} />;
 }
 
-function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserActive, deleteUser, resetUserPassword }) {
+function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserActive, deleteUser, resetUserPassword, updateUserClients, company, setCompany }) {
   const [view, setView] = useState("overview");
   const [openProjectId, setOpenProjectId] = useState(null);
   const [projTab, setProjTab] = useState("budget");
@@ -555,21 +591,31 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const memberById = (id) => team.find((t) => t.id === id);
   const openProject = openProjectId ? projectById(openProjectId) : null;
 
+  // ---------- User access control ----------
+  // Admins see everything. Other roles only see clients they're assigned to (if list is non-empty).
+  const fullUser = users.find((u) => u.id === currentUser.id);
+  const userAllowedClients = fullUser?.allowedClients || [];
+  const hasClientRestriction = !isAdmin && userAllowedClients.length > 0;
+  const canSeeClient = (clientId) => !hasClientRestriction || userAllowedClients.includes(clientId);
+  const accessibleClients = clients.filter((c) => canSeeClient(c.id));
+
   // ---------- Filtered data ----------
   const visibleProjects = useMemo(() =>
     projects.filter((p) =>
+      canSeeClient(p.clientId) &&
       (clientFilter === "all" || p.clientId === clientFilter) &&
       (!search || p.name.toLowerCase().includes(search.toLowerCase()))
-    ), [projects, clientFilter, search]);
+    ), [projects, clientFilter, search, userAllowedClients]);
 
   const visibleTasks = useMemo(() =>
     tasks.filter((t) => {
       const p = projectById(t.projectId);
       if (!p) return false;
+      if (!canSeeClient(p.clientId)) return false;
       if (clientFilter !== "all" && p.clientId !== clientFilter) return false;
       if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
-    }), [tasks, projects, clientFilter, search]);
+    }), [tasks, projects, clientFilter, search, userAllowedClients]);
 
   // ---------- Mutations ----------
   const moveTask = (id, dir) => setTasks((ts) => ts.map((t) => {
@@ -708,7 +754,8 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
       `Kindly settle on or before the due date. Let us know if you need any supporting documents.`,
       ``,
       `Thank you,`,
-      `Creative Studio`,
+      `${company.name}`,
+      `${company.email || ""}`,
     ].join("\n");
     const mailto = `mailto:${encodeURIComponent(c?.email || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(mailto, "_blank");
@@ -716,12 +763,14 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   };
 
   // ---------- Derived ----------
-  const openTasks = tasks.filter((t) => t.status !== "delivered");
+  const accessProjects = projects.filter((p) => canSeeClient(p.clientId));
+  const accessTasks = tasks.filter((t) => { const p = projectById(t.projectId); return p && canSeeClient(p.clientId); });
+  const openTasks = accessTasks.filter((t) => t.status !== "delivered");
   const overdue = openTasks.filter((t) => { const d = daysLeft(t.due); return d !== null && d < 0; });
   const dueThisWeek = openTasks.filter((t) => { const d = daysLeft(t.due); return d !== null && d >= 0 && d <= 7; });
-  const upcomingEvents = projects.filter((p) => p.type === "activation" && daysLeft(p.startDate) !== null && daysLeft(p.startDate) >= 0)
+  const upcomingEvents = accessProjects.filter((p) => p.type === "activation" && daysLeft(p.startDate) !== null && daysLeft(p.startDate) >= 0)
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-  const pipeline = projects.reduce((s, p) => s + (p.budget || 0), 0);
+  const pipeline = accessProjects.reduce((s, p) => s + (p.budget || 0), 0);
 
   const projectProgress = (pid) => {
     const pt = tasks.filter((t) => t.projectId === pid);
@@ -756,7 +805,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const Overview = () => (
     <div>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-        <StatCard icon={Briefcase} label="Active projects" value={projects.length} sub={`${projects.filter((p) => p.type === "activation").length} activations · ${projects.filter((p) => p.type === "digital").length} digital`} />
+        <StatCard icon={Briefcase} label="Active projects" value={accessProjects.length} sub={`${accessProjects.filter((p) => p.type === "activation").length} activations · ${accessProjects.filter((p) => p.type === "digital").length} digital`} />
         <StatCard icon={CalendarDays} label="Next event" value={upcomingEvents[0] ? fmtDate(upcomingEvents[0].startDate) : "—"} sub={upcomingEvents[0] ? upcomingEvents[0].name : "No upcoming events"} />
         <StatCard icon={Kanban} label="Open tasks" value={openTasks.length} sub={`${overdue.length} overdue · ${dueThisWeek.length} due this week`} />
         <StatCard icon={CircleDollarSign} label="Pipeline" value={money(pipeline)} sub="all active project budgets" />
@@ -826,7 +875,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
         {/* Budget watch */}
         <div style={cardStyle}>
           <h3 style={sectionTitle}>Activation budget watch</h3>
-          {projects.filter((p) => p.type === "activation").map((p) => {
+          {accessProjects.filter((p) => p.type === "activation").map((p) => {
             const b = projBudget(p.id);
             const pct = b.planned ? Math.round((b.actual / b.planned) * 100) : 0;
             const pay = payables(p.id);
@@ -1194,8 +1243,8 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
               onChange={(e) => updateReport(p.id, "notes", e.target.value)} />
             <div style={{ marginTop: 14, fontSize: 13, color: T.textDim }}>
               Final spend: <b style={{ color: T.ink }}>{money(b.actual)}</b> vs budget {money(p.budget || b.planned)}
-              {p.report.samples && b.actual > 0 ? <> · cost per sample: <b style={{ color: T.ink }}>{"$" + (b.actual / Number(p.report.samples)).toFixed(2)}</b></> : null}
-              {p.report.leads && b.actual > 0 ? <> · cost per lead: <b style={{ color: T.ink }}>{"$" + (b.actual / Number(p.report.leads)).toFixed(2)}</b></> : null}
+              {p.report.samples && b.actual > 0 ? <> · cost per sample: <b style={{ color: T.ink }}>{"₱" + (b.actual / Number(p.report.samples)).toFixed(2)}</b></> : null}
+              {p.report.leads && b.actual > 0 ? <> · cost per lead: <b style={{ color: T.ink }}>{"₱" + (b.actual / Number(p.report.leads)).toFixed(2)}</b></> : null}
             </div>
           </div>
         )}
@@ -1206,7 +1255,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   // ---------- Clients ----------
   const Clients = () => (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 16 }}>
-      {clients.map((c) => {
+      {accessibleClients.map((c) => {
         const cp = projects.filter((p) => p.clientId === c.id);
         const ct = tasks.filter((t) => cp.some((p) => p.id === t.projectId) && t.status !== "delivered");
         return (
@@ -1341,9 +1390,62 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
     );
   };
 
-  // ---------- User Management (Admin only) ----------
+  // ---------- User Management + Company Profile (Admin only) ----------
+  const [companyEdit, setCompanyEdit] = useState(false);
+  const [companyForm, setCompanyForm] = useState({ ...company });
+  const [editingUserClients, setEditingUserClients] = useState(null); // user id being edited
+
+  const saveCompany = () => { setCompany({ ...companyForm }); setCompanyEdit(false); };
+  const toggleClientForUser = (userId, clientId) => {
+    const u = users.find((x) => x.id === userId);
+    if (!u) return;
+    const cur = u.allowedClients || [];
+    const next = cur.includes(clientId) ? cur.filter((x) => x !== clientId) : [...cur, clientId];
+    updateUserClients(userId, next);
+  };
+
   const UserManagement = () => (
     <div>
+      {/* Company profile */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+          <h3 style={sectionTitle}>Company profile</h3>
+          {!companyEdit && <button style={{ ...btnGhost, fontSize: 12, fontWeight: 700 }} onClick={() => { setCompanyForm({ ...company }); setCompanyEdit(true); }}>Edit</button>}
+        </div>
+        {companyEdit ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Company name</label>
+                <input style={inputStyle} value={companyForm.name || ""} onChange={(e) => setCompanyForm((f) => ({ ...f, name: e.target.value }))} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Tagline</label>
+                <input style={inputStyle} value={companyForm.tagline || ""} onChange={(e) => setCompanyForm((f) => ({ ...f, tagline: e.target.value }))} /></div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Email</label>
+                <input style={inputStyle} value={companyForm.email || ""} onChange={(e) => setCompanyForm((f) => ({ ...f, email: e.target.value }))} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Phone</label>
+                <input style={inputStyle} value={companyForm.phone || ""} onChange={(e) => setCompanyForm((f) => ({ ...f, phone: e.target.value }))} /></div>
+            </div>
+            <div><label style={labelStyle}>Address</label>
+              <input style={inputStyle} value={companyForm.address || ""} onChange={(e) => setCompanyForm((f) => ({ ...f, address: e.target.value }))} /></div>
+            <div><label style={labelStyle}>Website</label>
+              <input style={inputStyle} value={companyForm.website || ""} onChange={(e) => setCompanyForm((f) => ({ ...f, website: e.target.value }))} /></div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ ...btnPrimary }} onClick={saveCompany}>Save changes</button>
+              <button style={btnGhost} onClick={() => setCompanyEdit(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+            {[["Company", company.name], ["Tagline", company.tagline], ["Email", company.email], ["Phone", company.phone], ["Address", company.address], ["Website", company.website]].map(([k, v]) => (
+              <div key={k}><div style={{ fontSize: 11, fontWeight: 700, color: T.textDim, textTransform: "uppercase", letterSpacing: 0.6 }}>{k}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: T.ink, marginTop: 2 }}>{v || "—"}</div></div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* User list */}
       <div style={{ ...cardStyle, marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 15 }}>
@@ -1359,13 +1461,15 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
       </div>
       <div style={cardStyle}>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 580 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
             <thead><tr>
               <th style={th}>User</th><th style={th}>Username</th>
-              <th style={th}>Role</th><th style={th}>Status</th><th style={th}>Actions</th>
+              <th style={th}>Role</th><th style={th}>Client access</th><th style={th}>Status</th><th style={th}>Actions</th>
             </tr></thead>
             <tbody>
-              {users.map((u) => (
+              {users.map((u) => {
+                const ac = u.allowedClients || [];
+                return (
                 <tr key={u.id} style={{ opacity: u.active ? 1 : 0.55 }}>
                   <td style={td}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1383,6 +1487,45 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
                       background: u.role === "Admin" ? "#ECEBFE" : u.role === "Manager" ? "#FEF3C7" : "#F0F2F6",
                       color: u.role === "Admin" ? "#4038EF" : u.role === "Manager" ? "#92400E" : T.textDim,
                     }}>{u.role}</span>
+                  </td>
+                  <td style={td}>
+                    {u.role === "Admin" ? (
+                      <span style={{ fontSize: 12, color: T.textDim, fontStyle: "italic" }}>All clients (admin)</span>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        {ac.length === 0 ? (
+                          <span style={{ fontSize: 12, color: T.textDim }}>All clients</span>
+                        ) : (
+                          ac.map((cid) => {
+                            const cl = clientById(cid);
+                            return cl ? <Chip key={cid} color={cl.color}>{cl.name}</Chip> : null;
+                          })
+                        )}
+                        <button style={{ ...btnGhost, padding: "2px 6px", fontSize: 11, fontWeight: 700 }}
+                          onClick={() => setEditingUserClients(editingUserClients === u.id ? null : u.id)}>
+                          Edit
+                        </button>
+                      </div>
+                    )}
+                    {editingUserClients === u.id && u.role !== "Admin" && (
+                      <div style={{ marginTop: 8, padding: "10px 12px", background: "#F9FAFB", borderRadius: 9, border: `1px solid ${T.line}` }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: T.textDim, marginBottom: 6 }}>
+                          Select which clients this user can access. Leave all unchecked for full access.
+                        </div>
+                        {clients.map((c) => (
+                          <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", cursor: "pointer", fontSize: 13 }}>
+                            <input type="checkbox" checked={ac.includes(c.id)}
+                              onChange={() => toggleClientForUser(u.id, c.id)}
+                              style={{ accentColor: T.accent }} />
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.color }} />
+                            <span style={{ fontWeight: 600 }}>{c.name}</span>
+                            <span style={{ color: T.textDim, fontSize: 12 }}>— {c.industry}</span>
+                          </label>
+                        ))}
+                        <button style={{ ...btnGhost, marginTop: 8, fontSize: 12, fontWeight: 700 }}
+                          onClick={() => setEditingUserClients(null)}>Done</button>
+                      </div>
+                    )}
                   </td>
                   <td style={td}>
                     <button onClick={() => { if (u.id !== currentUser.id) toggleUserActive(u.id); }}
@@ -1407,7 +1550,8 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
                     )}
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -1453,8 +1597,8 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             <Megaphone size={16} color="#fff" />
           </div>
           <div>
-            <div style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>Creative Studio</div>
-            <div style={{ color: "#8A90A4", fontSize: 10.5, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Agency PM</div>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>{company.name}</div>
+            <div style={{ color: "#8A90A4", fontSize: 10.5, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>{company.tagline || "Agency PM"}</div>
           </div>
         </div>
         <NavBtn id="overview" icon={LayoutGrid} label="Overview" />
@@ -1522,7 +1666,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             </div>
             <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} style={{ ...inputStyle, width: "auto", background: "#fff" }}>
               <option value="all">All clients</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {accessibleClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <button style={btnPrimary} onClick={() => openModal(view === "board" ? "task" : view === "billing" ? "invoice" : view === "users" ? "addUser" : "project")}>
               <Plus size={15} /> {view === "board" ? "New task" : view === "billing" ? "New invoice" : view === "users" ? "Add user" : "New project"}
@@ -1558,7 +1702,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
                 <select style={inputStyle} value={form.service || "Activation"} onChange={set("service")}>
                   {SERVICES.map((s) => <option key={s}>{s}</option>)}
                 </select></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Total budget ($)</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Total budget (₱)</label>
                 <input style={inputStyle} type="number" value={form.budget || ""} onChange={set("budget")} placeholder="0" /></div>
             </div>
             {isActProject ? (
@@ -1640,7 +1784,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             <div style={{ display: "flex", gap: 10 }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>Industry</label>
                 <input style={inputStyle} value={form.industry || ""} onChange={set("industry")} /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Retainer ($/mo)</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Retainer (₱/mo)</label>
                 <input style={inputStyle} type="number" value={form.retainer || ""} onChange={set("retainer")} placeholder="0" /></div>
             </div>
             <div><label style={labelStyle}>Billing email</label>
@@ -1660,9 +1804,9 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             <div><label style={labelStyle}>Line item</label>
               <input style={inputStyle} value={form.label || ""} onChange={set("label")} placeholder="e.g., LED wall rental" autoFocus /></div>
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Planned ($)</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Planned (₱)</label>
                 <input style={inputStyle} type="number" value={form.planned || ""} onChange={set("planned")} placeholder="0" /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Actual ($)</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Actual (₱)</label>
                 <input style={inputStyle} type="number" value={form.actual || ""} onChange={set("actual")} placeholder="0" /></div>
             </div>
             <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addBudgetItem}>Add line</button>
@@ -1678,7 +1822,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             <div style={{ display: "flex", gap: 10 }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>Service</label>
                 <input style={inputStyle} value={form.service || ""} onChange={set("service")} placeholder="e.g., Booth fabrication" /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Quote ($)</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Quote (₱)</label>
                 <input style={inputStyle} type="number" value={form.quote || ""} onChange={set("quote")} placeholder="0" /></div>
             </div>
             <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addVendor}>Add vendor</button>
@@ -1694,7 +1838,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             <div><label style={labelStyle}>Role</label>
               <input style={inputStyle} value={form.role || ""} onChange={set("role")} placeholder="e.g., Brand ambassador, emcee, setup crew" /></div>
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Rate / day ($)</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Rate / day (₱)</label>
                 <input style={inputStyle} type="number" value={form.rate || ""} onChange={set("rate")} placeholder="0" /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>Call time</label>
                 <input style={inputStyle} type="time" value={form.callTime || ""} onChange={set("callTime")} /></div>
@@ -1720,7 +1864,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             <div><label style={labelStyle}>Description</label>
               <input style={inputStyle} value={form.desc || ""} onChange={set("desc")} placeholder="e.g., Activation production — 50% balance" autoFocus /></div>
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>Amount ($)</label>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Amount (₱)</label>
                 <input style={inputStyle} type="number" value={form.amount || ""} onChange={set("amount")} placeholder="0" /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>Due date</label>
                 <input style={inputStyle} type="date" value={form.dueDate || ""} onChange={set("dueDate")} /></div>
@@ -1760,8 +1904,29 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
                   {ROLES.map((r) => <option key={r}>{r}</option>)}
                 </select></div>
             </div>
+            {(form.role || "Staff") !== "Admin" && (
+              <div>
+                <label style={labelStyle}>Restrict to specific clients (optional)</label>
+                <div style={{ padding: "8px 12px", background: "#F9FAFB", borderRadius: 9, border: `1px solid ${T.line}` }}>
+                  {clients.map((c) => (
+                    <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer", fontSize: 13 }}>
+                      <input type="checkbox" checked={(form.allowedClients || []).includes(c.id)}
+                        onChange={() => {
+                          const cur = form.allowedClients || [];
+                          const next = cur.includes(c.id) ? cur.filter((x) => x !== c.id) : [...cur, c.id];
+                          setForm((f) => ({ ...f, allowedClients: next }));
+                        }}
+                        style={{ accentColor: T.accent }} />
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.color }} />
+                      <span style={{ fontWeight: 600 }}>{c.name}</span>
+                    </label>
+                  ))}
+                  <div style={{ fontSize: 11.5, color: T.textDim, marginTop: 4 }}>Leave all unchecked to give access to all clients.</div>
+                </div>
+              </div>
+            )}
             <div style={{ fontSize: 12, color: T.textDim }}>
-              The user can sign in immediately with these credentials. Admins can manage users, reset passwords, and disable accounts.
+              The user can sign in immediately. Admins always have full access to all clients.
             </div>
             <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addUser}>
               <UserPlus size={14} /> Create user
