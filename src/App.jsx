@@ -3,7 +3,8 @@ import {
   LayoutGrid, Kanban, Users, Plus, Search, ChevronLeft, ChevronRight, ArrowLeft,
   CalendarDays, CircleDollarSign, Briefcase, Clock, X, Trash2, Megaphone,
   MapPin, Truck, HardHat, ClipboardCheck, BarChart3, FolderKanban, CheckCircle2, Circle,
-  Cloud, CloudOff, RotateCcw, Receipt, Send, Zap, Lock, UserPlus, LogOut, Shield, Eye, EyeOff
+  Cloud, CloudOff, RotateCcw, Receipt, Send, Zap, Lock, UserPlus, LogOut, Shield, Eye, EyeOff,
+  Paperclip, Link2, History, Layers, ExternalLink, FileText, AlertTriangle
 } from "lucide-react";
 
 // ---------- Design tokens ----------
@@ -137,6 +138,24 @@ const seedInvoices = [
   { id: "i2", number: "INV-2026-042", clientId: "c3", projectId: "", desc: "Monthly retainer — July 2026", amount: 6000, issueDate: "2026-07-01", dueDate: "2026-07-16", status: "paid" },
 ];
 
+const seedCampaigns = [
+  { id: "cmp1", name: "Harvest Mall Sampling Tour 2026", clientId: "c1", projectIds: ["p1"], notes: "Multi-leg activation across 5 malls. Leg 1 starts Aug 22." },
+];
+
+const seedAttachments = [
+  { id: "a1", projectId: "p1", label: "Booth KV Final v3", url: "https://drive.google.com/example/booth-kv", type: "design", addedBy: "u0", addedAt: "2026-07-28" },
+  { id: "a2", projectId: "p1", label: "Mall Admin Permit (signed)", url: "https://drive.google.com/example/permit", type: "permit", addedBy: "u0", addedAt: "2026-08-01" },
+  { id: "a3", projectId: "p2", label: "Wellness Fair Contract", url: "https://drive.google.com/example/contract", type: "contract", addedBy: "u0", addedAt: "2026-07-15" },
+];
+
+const seedActivityLog = [
+  { id: "log1", ts: "2026-08-01T10:30:00", userId: "u0", action: "Created project", detail: "Mall Sampling Tour — Leg 1", projectId: "p1" },
+  { id: "log2", ts: "2026-08-01T10:45:00", userId: "u0", action: "Added vendor", detail: "BuildRight Fabrication — Booth fabrication", projectId: "p1" },
+  { id: "log3", ts: "2026-08-02T09:00:00", userId: "u0", action: "Moved task", detail: "Booth design KV → Client review", projectId: "p1" },
+];
+
+const ATTACH_TYPES = ["design", "permit", "contract", "proposal", "report", "photo", "other"];
+
 // ---------- Persistent storage ----------
 // All board data is kept in ONE shared key so the whole team sees the same board.
 const STORAGE_KEY = "agency-pm:board:v1";
@@ -174,14 +193,14 @@ const storageWrite = async (mode, json) => {
 const seedBundle = () => ({
   clients: seedClients, projects: seedProjects, tasks: seedTasks,
   budgetItems: seedBudgetItems, vendors: seedVendors, manpower: seedManpower, checklist: seedChecklist,
-  invoices: seedInvoices,
+  invoices: seedInvoices, campaigns: seedCampaigns, attachments: seedAttachments, activityLog: seedActivityLog,
 });
 
 // ---------- Auth storage (separate key so board data stays clean) ----------
 const AUTH_KEY = "agency-pm:users:v1";
 const SESSION_KEY = "agency-pm:session";
 const COMPANY_KEY = "agency-pm:company:v1";
-const ROLES = ["Admin", "Manager", "Staff"];
+const ROLES = ["Admin", "Manager", "Staff", "Client"];
 
 const seedUsers = [
   { id: "u0", username: "admin", password: "admin123", name: "Admin", role: "Admin", active: true, allowedClients: [] },
@@ -509,6 +528,9 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const [manpower, setManpower] = useState(seedManpower);
   const [checklist, setChecklist] = useState(seedChecklist);
   const [invoices, setInvoices] = useState(seedInvoices);
+  const [campaigns, setCampaigns] = useState(seedCampaigns);
+  const [attachments, setAttachments] = useState(seedAttachments);
+  const [activityLog, setActivityLog] = useState(seedActivityLog);
 
   const [clientFilter, setClientFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -531,6 +553,9 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
     if (d.manpower) setManpower(d.manpower);
     if (d.checklist) setChecklist(d.checklist);
     if (d.invoices) setInvoices(d.invoices);
+    if (d.campaigns) setCampaigns(d.campaigns);
+    if (d.attachments) setAttachments(d.attachments);
+    if (d.activityLog) setActivityLog(d.activityLog);
   };
 
   useEffect(() => {
@@ -563,6 +588,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
       try {
         const ok = await storageWrite(storageMode, JSON.stringify({
           clients, projects, tasks, budgetItems, vendors, manpower, checklist, invoices,
+          campaigns, attachments, activityLog,
         }));
         setSaveState(ok ? "saved" : "error");
       } catch (err) {
@@ -571,7 +597,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
       }
     }, 800);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [clients, projects, tasks, budgetItems, vendors, manpower, checklist, invoices, loaded, storageMode]);
+  }, [clients, projects, tasks, budgetItems, vendors, manpower, checklist, invoices, campaigns, attachments, activityLog, loaded, storageMode]);
 
   const resetAll = async () => {
     if (!resetArm) { setResetArm(true); setTimeout(() => setResetArm(false), 4000); return; }
@@ -598,6 +624,33 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const hasClientRestriction = !isAdmin && userAllowedClients.length > 0;
   const canSeeClient = (clientId) => !hasClientRestriction || userAllowedClients.includes(clientId);
   const accessibleClients = clients.filter((c) => canSeeClient(c.id));
+  const isClient = currentUser?.role === "Client";
+  const isStaff = currentUser?.role === "Staff";
+  const isManagerOrAbove = currentUser?.role === "Admin" || currentUser?.role === "Manager";
+
+  // Permission helpers
+  const can = {
+    editBudget: isAdmin || currentUser?.role === "Manager",
+    viewBilling: isAdmin || currentUser?.role === "Manager",
+    deleteProject: isAdmin,
+    manageUsers: isAdmin,
+    manageCompany: isAdmin,
+    createProject: isAdmin || currentUser?.role === "Manager",
+    createTask: !isClient,
+    editVendor: !isClient && !isStaff,
+    editManpower: !isClient && !isStaff,
+    viewActivity: !isClient,
+    manageCampaigns: isAdmin || currentUser?.role === "Manager",
+    addAttachment: !isClient,
+  };
+
+  // Activity logger
+  const logActivity = (action, detail, projectId) => {
+    setActivityLog((log) => [{
+      id: uid(), ts: new Date().toISOString(), userId: currentUser.id,
+      action, detail: detail || "", projectId: projectId || "",
+    }, ...log].slice(0, 200)); // keep last 200 entries
+  };
 
   // ---------- Filtered data ----------
   const visibleProjects = useMemo(() =>
@@ -635,6 +688,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
       report: { attendance: "", samples: "", leads: "", notes: "" },
     };
     setProjects((ps) => [...ps, p]);
+    logActivity("Created project", p.name, p.id);
     setModal(null);
     if (type === "activation") { setOpenProjectId(p.id); setView("projects"); setProjTab("budget"); }
   };
@@ -642,8 +696,9 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const addTask = () => {
     if (!form.title || !form.projectId) return;
     setTasks((ts) => [...ts, { id: uid(), title: form.title, projectId: form.projectId, assignee: form.assignee || team[0].id, status: "briefing", due: form.due || "" }]);
+    logActivity("Added task", form.title, form.projectId);
     setTaskAdded((n) => n + 1);
-    setForm((f) => ({ ...f, _saved: true })); // triggers the "add another?" prompt
+    setForm((f) => ({ ...f, _saved: true }));
   };
   const taskAddAnother = () => setForm((f) => ({ ...f, title: "", due: "", _saved: false }));
   const taskDone = () => { setModal(null); setTaskAdded(0); };
@@ -651,12 +706,14 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const addClient = () => {
     if (!form.name) return;
     setClients((cs) => [...cs, { id: uid(), name: form.name, industry: form.industry || "—", color: CLIENT_COLORS[cs.length % CLIENT_COLORS.length], retainer: Number(form.retainer) || 0, email: form.email || "" }]);
+    logActivity("Added client", form.name);
     setModal(null);
   };
 
   const addBudgetItem = () => {
     if (!form.label) return;
     setBudgetItems((xs) => [...xs, { id: uid(), projectId: openProjectId, category: form.category || BUDGET_CATS[0], label: form.label, planned: Number(form.planned) || 0, actual: Number(form.actual) || 0 }]);
+    logActivity("Added budget line", form.label, openProjectId);
     setModal(null);
   };
   const updateBudgetActual = (id, val) => setBudgetItems((xs) => xs.map((x) => x.id === id ? { ...x, actual: Number(val) || 0 } : x));
@@ -665,14 +722,16 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const addVendor = () => {
     if (!form.name) return;
     setVendors((xs) => [...xs, { id: uid(), projectId: openProjectId, name: form.name, service: form.service || "", quote: Number(form.quote) || 0, status: "canvassing" }]);
+    logActivity("Added vendor", `${form.name} — ${form.service}`, openProjectId);
     setModal(null);
   };
-  const setVendorStatus = (id, status) => setVendors((xs) => xs.map((x) => x.id === id ? { ...x, status } : x));
+  const setVendorStatus = (id, status) => { setVendors((xs) => xs.map((x) => x.id === id ? { ...x, status } : x)); const v = vendors.find((x) => x.id === id); if (v) logActivity("Vendor status", `${v.name} → ${status}`, v.projectId); };
   const deleteVendor = (id) => setVendors((xs) => xs.filter((x) => x.id !== id));
 
   const addManpower = () => {
     if (!form.name) return;
     setManpower((xs) => [...xs, { id: uid(), projectId: openProjectId, name: form.name, role: form.role || "", rate: Number(form.rate) || 0, callTime: form.callTime || "", status: "pending" }]);
+    logActivity("Added manpower", `${form.name} — ${form.role}`, openProjectId);
     setModal(null);
   };
   const setManpowerStatus = (id, status) => setManpower((xs) => xs.map((x) => x.id === id ? { ...x, status } : x));
@@ -681,10 +740,30 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const addCheckItem = () => {
     if (!form.label) return;
     setChecklist((xs) => [...xs, { id: uid(), projectId: openProjectId, group: form.group || CHECK_GROUPS[0], label: form.label, done: false }]);
+    logActivity("Added checklist item", form.label, openProjectId);
     setModal(null);
   };
   const toggleCheck = (id) => setChecklist((xs) => xs.map((x) => x.id === id ? { ...x, done: !x.done } : x));
   const deleteCheck = (id) => setChecklist((xs) => xs.filter((x) => x.id !== id));
+
+  // Attachments
+  const addAttachment = () => {
+    if (!form.label || !form.url) return;
+    setAttachments((xs) => [...xs, { id: uid(), projectId: openProjectId, label: form.label, url: form.url, type: form.attachType || "other", addedBy: currentUser.id, addedAt: new Date().toISOString().slice(0, 10) }]);
+    logActivity("Added file link", form.label, openProjectId);
+    setModal(null);
+  };
+  const deleteAttachment = (id) => setAttachments((xs) => xs.filter((x) => x.id !== id));
+
+  // Campaigns
+  const addCampaign = () => {
+    if (!form.name || !form.clientId) return;
+    setCampaigns((xs) => [...xs, { id: uid(), name: form.name, clientId: form.clientId, projectIds: form.campaignProjectIds || [], notes: form.notes || "" }]);
+    logActivity("Created campaign", form.name);
+    setModal(null);
+  };
+  const toggleProjectInCampaign = (cmpId, pId) => setCampaigns((xs) => xs.map((c) => c.id === cmpId ? { ...c, projectIds: c.projectIds.includes(pId) ? c.projectIds.filter((x) => x !== pId) : [...c.projectIds, pId] } : c));
+  const deleteCampaign = (id) => setCampaigns((xs) => xs.filter((x) => x.id !== id));
 
   const updateReport = (pid, k, v) => setProjects((ps) => ps.map((p) => p.id === pid ? { ...p, report: { ...p.report, [k]: v } } : p));
 
@@ -1048,6 +1127,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
           {isAct && <TabBtn id="manpower" icon={HardHat} label="Manpower" count={pMan.length} />}
           {isAct && <TabBtn id="checklist" icon={ClipboardCheck} label="Checklist" count={pCheck.filter((x) => !x.done).length} />}
           <TabBtn id="tasks" icon={Kanban} label="Tasks" count={pTasks.length} />
+          <TabBtn id="files" icon={Paperclip} label="Files" count={attachments.filter((a) => a.projectId === p.id).length} />
           {isAct && <TabBtn id="report" icon={BarChart3} label="Post-event report" />}
         </div>
 
@@ -1220,6 +1300,41 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
           </div>
         )}
 
+        {/* Files tab */}
+        {projTab === "files" && (
+          <div style={cardStyle}>
+            <h3 style={sectionTitle}>File attachments</h3>
+            {(() => { const pFiles = attachments.filter((a) => a.projectId === p.id); return (
+              <>
+                {pFiles.length === 0 && <Empty text="No files linked yet. Add Google Drive, Dropbox, or any URLs for KVs, permits, contracts, and photos." />}
+                {pFiles.map((f) => {
+                  const addedUser = users.find((u) => u.id === f.addedBy);
+                  return (
+                    <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: `1px solid ${T.line}` }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 9, background: T.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <FileText size={16} color={T.accent} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{f.label}</div>
+                        <div style={{ fontSize: 11.5, color: T.textDim }}>
+                          <span style={{ textTransform: "capitalize" }}>{f.type}</span> · Added by {addedUser?.name || "Unknown"} · {fmtDate(f.addedAt)}
+                        </div>
+                      </div>
+                      <a href={f.url} target="_blank" rel="noopener noreferrer" style={{ ...btnGhost, fontSize: 12, fontWeight: 700, textDecoration: "none", color: T.accent }}>
+                        <ExternalLink size={12} /> Open
+                      </a>
+                      {can.addAttachment && (
+                        <button style={{ ...btnGhost, padding: "3px 5px" }} onClick={() => deleteAttachment(f.id)} aria-label="Delete file"><Trash2 size={13} /></button>
+                      )}
+                    </div>
+                  );
+                })}
+                {can.addAttachment && <AddRowBtn label="Add file link" onClick={() => openModal("attachment")} />}
+              </>
+            );})()}
+          </div>
+        )}
+
         {/* Report tab */}
         {projTab === "report" && (
           <div style={cardStyle}>
@@ -1386,6 +1501,179 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             "Send" opens a pre-filled email to the client's billing address in your mail app, then marks the invoice as sent. Mark it paid once payment lands.
           </div>
         </div>
+      </div>
+    );
+  };
+
+  // ---------- Activity Log ----------
+  const ActivityLog = () => {
+    const visLog = activityLog.filter((l) => {
+      if (l.projectId) { const p = projectById(l.projectId); if (p && !canSeeClient(p.clientId)) return false; }
+      if (search && !l.action.toLowerCase().includes(search.toLowerCase()) && !l.detail.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+    return (
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Activity log — last 200 actions</h3>
+        {visLog.length === 0 && <Empty text="No activity recorded yet." />}
+        {visLog.slice(0, 50).map((l) => {
+          const u = users.find((x) => x.id === l.userId);
+          const p = l.projectId ? projectById(l.projectId) : null;
+          return (
+            <div key={l.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0", borderTop: `1px solid ${T.line}` }}>
+              <Avatar name={u?.name || "?"} size={24} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+                  <b>{u?.name || "Unknown"}</b> <span style={{ color: T.textDim }}>{l.action}</span>
+                  {l.detail && <> — <span style={{ fontWeight: 600 }}>{l.detail}</span></>}
+                </div>
+                <div style={{ fontSize: 11.5, color: T.textDim, display: "flex", gap: 10, marginTop: 2 }}>
+                  <span>{new Date(l.ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                  {p && <span>· {p.name}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ---------- Campaigns (multi-leg view) ----------
+  const CampaignsView = () => {
+    const visCmp = campaigns.filter((c) => canSeeClient(c.clientId));
+    return (
+      <div>
+        {visCmp.length === 0 && <div style={cardStyle}><Empty text="No campaigns yet. Group multiple project legs into a single campaign to see combined progress and reporting." /></div>}
+        {visCmp.map((cmp) => {
+          const cl = clientById(cmp.clientId);
+          const legs = cmp.projectIds.map((pid) => projectById(pid)).filter(Boolean);
+          const allTasks = tasks.filter((t) => legs.some((p) => p.id === t.projectId));
+          const doneTasks = allTasks.filter((t) => t.status === "delivered");
+          const totalBudget = legs.reduce((s, p) => s + (p.budget || 0), 0);
+          const totalActual = legs.reduce((s, p) => { const b = budgetItems.filter((x) => x.projectId === p.id); return s + b.reduce((ss, x) => ss + x.actual, 0); }, 0);
+          const totalAttendance = legs.reduce((s, p) => s + (Number(p.report?.attendance) || 0), 0);
+          const totalSamples = legs.reduce((s, p) => s + (Number(p.report?.samples) || 0), 0);
+          const totalLeads = legs.reduce((s, p) => s + (Number(p.report?.leads) || 0), 0);
+          return (
+            <div key={cmp.id} style={{ ...cardStyle, marginBottom: 16, padding: 0, overflow: "hidden" }}>
+              <div style={{ height: 6, background: cl?.color }} />
+              <div style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 17, fontWeight: 800 }}>{cmp.name}</div>
+                    <div style={{ fontSize: 13, color: T.textDim, marginTop: 2 }}>{cl?.name} · {legs.length} leg{legs.length !== 1 ? "s" : ""}</div>
+                    {cmp.notes && <div style={{ fontSize: 12.5, color: T.textDim, marginTop: 4 }}>{cmp.notes}</div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 16, textAlign: "right", fontSize: 13 }}>
+                    <div><div style={{ fontSize: 11, fontWeight: 800, color: T.textDim, textTransform: "uppercase" }}>Tasks</div><div style={{ fontWeight: 800 }}>{doneTasks.length}/{allTasks.length}</div></div>
+                    <div><div style={{ fontSize: 11, fontWeight: 800, color: T.textDim, textTransform: "uppercase" }}>Budget</div><div style={{ fontWeight: 800 }}>{money(totalActual)} <span style={{ fontWeight: 400, color: T.textDim }}>/ {money(totalBudget)}</span></div></div>
+                    {totalAttendance > 0 && <div><div style={{ fontSize: 11, fontWeight: 800, color: T.textDim, textTransform: "uppercase" }}>Attendance</div><div style={{ fontWeight: 800 }}>{totalAttendance.toLocaleString()}</div></div>}
+                    {totalSamples > 0 && <div><div style={{ fontSize: 11, fontWeight: 800, color: T.textDim, textTransform: "uppercase" }}>Samples</div><div style={{ fontWeight: 800 }}>{totalSamples.toLocaleString()}</div></div>}
+                    {totalLeads > 0 && <div><div style={{ fontSize: 11, fontWeight: 800, color: T.textDim, textTransform: "uppercase" }}>Leads</div><div style={{ fontWeight: 800 }}>{totalLeads.toLocaleString()}</div></div>}
+                  </div>
+                </div>
+                {/* Legs */}
+                <div style={{ marginTop: 14, borderTop: `1px solid ${T.line}` }}>
+                  {legs.map((p) => {
+                    const prog = projectProgress(p.id);
+                    return (
+                      <div key={p.id} onClick={() => { setOpenProjectId(p.id); setView("projects"); setProjTab(p.type === "activation" ? "budget" : "tasks"); }}
+                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${T.line}`, cursor: "pointer" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</div>
+                          <div style={{ fontSize: 12, color: T.textDim }}>{p.venue || p.service} · {fmtDate(p.startDate || p.due)}</div>
+                        </div>
+                        <div style={{ width: 80 }}>
+                          <div style={{ height: 5, borderRadius: 4, background: "#EDF0F4" }}><div style={{ height: "100%", width: `${prog}%`, borderRadius: 4, background: prog === 100 ? T.green : T.accent }} /></div>
+                          <div style={{ fontSize: 11, color: T.textDim, textAlign: "right", marginTop: 2 }}>{prog}%</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {can.manageCampaigns && (
+                  <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: T.textDim, fontWeight: 700 }}>Add leg:</span>
+                    {accessProjects.filter((p) => p.clientId === cmp.clientId && !cmp.projectIds.includes(p.id)).map((p) => (
+                      <button key={p.id} style={{ ...btnGhost, fontSize: 11.5, fontWeight: 700, padding: "3px 8px" }}
+                        onClick={() => toggleProjectInCampaign(cmp.id, p.id)}>
+                        <Plus size={11} /> {p.name}
+                      </button>
+                    ))}
+                    <button style={{ ...btnGhost, padding: "3px 5px", marginLeft: "auto" }} onClick={() => deleteCampaign(cmp.id)} aria-label="Delete campaign"><Trash2 size={13} /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ---------- Client Dashboard (read-only for Client role) ----------
+  const ClientDashboard = () => {
+    const myProjects = accessProjects;
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+          <StatCard icon={Briefcase} label="Your projects" value={myProjects.length} sub={`${myProjects.filter((p) => p.type === "activation").length} activations`} />
+          <StatCard icon={Kanban} label="Open tasks" value={openTasks.length} sub={`${overdue.length} overdue`} />
+        </div>
+        {myProjects.map((p) => {
+          const c = clientById(p.clientId);
+          const prog = projectProgress(p.id);
+          const pTasks = tasks.filter((t) => t.projectId === p.id);
+          const pCheck = checklist.filter((x) => x.projectId === p.id);
+          const pFiles = attachments.filter((a) => a.projectId === p.id);
+          return (
+            <div key={p.id} style={{ ...cardStyle, marginBottom: 16, padding: 0, overflow: "hidden" }}>
+              <div style={{ height: 6, background: c?.color }} />
+              <div style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>{p.name}</div>
+                    <div style={{ fontSize: 12.5, color: T.textDim }}>{p.service}{p.venue ? ` · ${p.venue}` : ""}{p.startDate ? ` · ${fmtDate(p.startDate)}` : ""}</div>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>{prog}% complete</div>
+                </div>
+                <div style={{ height: 6, borderRadius: 4, background: "#EDF0F4", marginTop: 12 }}>
+                  <div style={{ height: "100%", width: `${prog}%`, borderRadius: 4, background: prog === 100 ? T.green : T.accent }} />
+                </div>
+                {/* Tasks summary */}
+                {pTasks.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: T.textDim, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>Tasks</div>
+                    {pTasks.map((t) => {
+                      const s = STATUSES.find((x) => x.id === t.status);
+                      return (
+                        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: `1px solid ${T.line}` }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: s?.color, flexShrink: 0 }} />
+                          <span style={{ flex: 1, fontSize: 13 }}>{t.title}</span>
+                          <span style={{ fontSize: 12, color: s?.color, fontWeight: 700 }}>{s?.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Files */}
+                {pFiles.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: T.textDim, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 }}>Files</div>
+                    {pFiles.map((f) => (
+                      <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: `1px solid ${T.line}` }}>
+                        <FileText size={14} color={T.accent} />
+                        <span style={{ flex: 1, fontSize: 13 }}>{f.label}</span>
+                        <a href={f.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, fontWeight: 700, textDecoration: "none" }}>Open</a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -1601,12 +1889,20 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             <div style={{ color: "#8A90A4", fontSize: 10.5, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>{company.tagline || "Agency PM"}</div>
           </div>
         </div>
-        <NavBtn id="overview" icon={LayoutGrid} label="Overview" />
-        <NavBtn id="projects" icon={FolderKanban} label="Projects" />
-        <NavBtn id="board" icon={Kanban} label="Task board" />
-        <NavBtn id="clients" icon={Users} label="Clients" />
-        <NavBtn id="billing" icon={Receipt} label="Billing" />
-        {isAdmin && <NavBtn id="users" icon={Shield} label="Users" />}
+        {isClient ? (
+          <NavBtn id="dashboard" icon={LayoutGrid} label="My projects" />
+        ) : (
+          <>
+            <NavBtn id="overview" icon={LayoutGrid} label="Overview" />
+            <NavBtn id="projects" icon={FolderKanban} label="Projects" />
+            <NavBtn id="board" icon={Kanban} label="Task board" />
+            <NavBtn id="clients" icon={Users} label="Clients" />
+            {can.viewBilling && <NavBtn id="billing" icon={Receipt} label="Billing" />}
+            {can.manageCampaigns && <NavBtn id="campaigns" icon={Layers} label="Campaigns" />}
+            {can.viewActivity && <NavBtn id="activity" icon={History} label="Activity log" />}
+            {isAdmin && <NavBtn id="users" icon={Shield} label="Users" />}
+          </>
+        )}
         <div style={{ marginTop: "auto", padding: "14px 8px 4px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ color: "#8A90A4", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Team</div>
           {team.map((m) => (
@@ -1654,10 +1950,10 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
 
       {/* Main */}
       <main style={{ flex: 1, padding: "22px 26px", minWidth: 0 }}>
-        {!openProject && (
+        {!openProject && !isClient && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
             <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: -0.3 }}>
-              {view === "overview" ? "Overview" : view === "board" ? "Task board" : view === "projects" ? "Projects" : view === "billing" ? "Billing" : view === "users" ? "Users" : "Clients"}
+              {view === "overview" ? "Overview" : view === "board" ? "Task board" : view === "projects" ? "Projects" : view === "billing" ? "Billing" : view === "users" ? "Users" : view === "campaigns" ? "Campaigns" : view === "activity" ? "Activity log" : view === "dashboard" ? "My projects" : "Clients"}
             </h1>
             <div style={{ flex: 1 }} />
             <div style={{ position: "relative" }}>
@@ -1668,19 +1964,23 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
               <option value="all">All clients</option>
               {accessibleClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button style={btnPrimary} onClick={() => openModal(view === "board" ? "task" : view === "billing" ? "invoice" : view === "users" ? "addUser" : "project")}>
-              <Plus size={15} /> {view === "board" ? "New task" : view === "billing" ? "New invoice" : view === "users" ? "Add user" : "New project"}
+            <button style={btnPrimary} onClick={() => openModal(view === "board" ? "task" : view === "billing" ? "invoice" : view === "users" ? "addUser" : view === "campaigns" ? "campaign" : "project")}>
+              <Plus size={15} /> {view === "board" ? "New task" : view === "billing" ? "New invoice" : view === "users" ? "Add user" : view === "campaigns" ? "New campaign" : "New project"}
             </button>
           </div>
         )}
 
-        {openProject ? <ProjectDetail p={openProject} /> : (
+        {isClient ? (
+          <ClientDashboard />
+        ) : openProject ? <ProjectDetail p={openProject} /> : (
           <>
             {view === "overview" && <Overview />}
             {view === "board" && <Board />}
             {view === "projects" && <ProjectsList />}
             {view === "clients" && <Clients />}
-            {view === "billing" && <Billing />}
+            {view === "billing" && can.viewBilling && <Billing />}
+            {view === "campaigns" && <CampaignsView />}
+            {view === "activity" && <ActivityLog />}
             {view === "users" && isAdmin && <UserManagement />}
           </>
         )}
@@ -1930,6 +2230,61 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
             </div>
             <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addUser}>
               <UserPlus size={14} /> Create user
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {modal === "attachment" && (
+        <Modal title="Add file link" onClose={() => setModal(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+            <div><label style={labelStyle}>Label</label>
+              <input style={inputStyle} value={form.label || ""} onChange={set("label")} placeholder="e.g., Booth KV Final v3" autoFocus /></div>
+            <div><label style={labelStyle}>URL (Google Drive, Dropbox, etc.)</label>
+              <input style={inputStyle} value={form.url || ""} onChange={set("url")} placeholder="https://drive.google.com/..." /></div>
+            <div><label style={labelStyle}>Type</label>
+              <select style={inputStyle} value={form.attachType || "other"} onChange={set("attachType")}>
+                {ATTACH_TYPES.map((t) => <option key={t} value={t} style={{ textTransform: "capitalize" }}>{t}</option>)}
+              </select></div>
+            <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addAttachment}>
+              <Paperclip size={14} /> Add file link
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {modal === "campaign" && (
+        <Modal title="New campaign" onClose={() => setModal(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+            <div><label style={labelStyle}>Campaign name</label>
+              <input style={inputStyle} value={form.name || ""} onChange={set("name")} placeholder="e.g., Harvest Mall Tour 2026" autoFocus /></div>
+            <div><label style={labelStyle}>Client</label>
+              <select style={inputStyle} value={form.clientId || ""} onChange={set("clientId")}>
+                <option value="">Select client…</option>
+                {accessibleClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select></div>
+            <div><label style={labelStyle}>Notes</label>
+              <textarea style={{ ...inputStyle, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={form.notes || ""} onChange={set("notes")} placeholder="Campaign description or notes…" /></div>
+            {form.clientId && (
+              <div>
+                <label style={labelStyle}>Include projects (legs)</label>
+                <div style={{ padding: "8px 12px", background: "#F9FAFB", borderRadius: 9, border: `1px solid ${T.line}` }}>
+                  {projects.filter((p) => p.clientId === form.clientId).map((p) => (
+                    <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer", fontSize: 13 }}>
+                      <input type="checkbox" checked={(form.campaignProjectIds || []).includes(p.id)}
+                        onChange={() => {
+                          const cur = form.campaignProjectIds || [];
+                          setForm((f) => ({ ...f, campaignProjectIds: cur.includes(p.id) ? cur.filter((x) => x !== p.id) : [...cur, p.id] }));
+                        }}
+                        style={{ accentColor: T.accent }} />
+                      <span style={{ fontWeight: 600 }}>{p.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button style={{ ...btnPrimary, justifyContent: "center" }} onClick={addCampaign}>
+              <Layers size={14} /> Create campaign
             </button>
           </div>
         </Modal>
