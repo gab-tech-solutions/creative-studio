@@ -1971,17 +1971,17 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
         )}
 
         {isClient ? (
-          <ClientDashboard />
-        ) : openProject ? <ProjectDetail p={openProject} /> : (
+          ClientDashboard()
+        ) : openProject ? ProjectDetail({ p: openProject }) : (
           <>
-            {view === "overview" && <Overview />}
-            {view === "board" && <Board />}
-            {view === "projects" && <ProjectsList />}
-            {view === "clients" && <Clients />}
-            {view === "billing" && can.viewBilling && <Billing />}
-            {view === "campaigns" && <CampaignsView />}
-            {view === "activity" && <ActivityLog />}
-            {view === "users" && isAdmin && <UserManagement />}
+            {view === "overview" && Overview()}
+            {view === "board" && Board()}
+            {view === "projects" && ProjectsList()}
+            {view === "clients" && Clients()}
+            {view === "billing" && can.viewBilling && Billing()}
+            {view === "campaigns" && CampaignsView()}
+            {view === "activity" && ActivityLog()}
+            {view === "users" && isAdmin && UserManagement()}
           </>
         )}
       </main>
