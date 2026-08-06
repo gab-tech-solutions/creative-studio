@@ -479,18 +479,6 @@ export default function AgencyPM() {
 
   const isAdmin = currentUser?.role === "Admin";
 
-  const addUser = () => {
-    if (!form.username || !form.password || !form.name) return;
-    if (users.some((u) => u.username.toLowerCase() === form.username.toLowerCase())) {
-      alert("Username already taken."); return;
-    }
-    setUsers((us) => [...us, {
-      id: uid(), username: form.username, password: form.password,
-      name: form.name, role: form.role || "Staff", active: true,
-      allowedClients: form.allowedClients || [],
-    }]);
-    setModal(null);
-  };
   const toggleUserActive = (id) => setUsers((us) => us.map((u) => u.id === id ? { ...u, active: !u.active } : u));
   const deleteUser = (id) => { if (id === currentUser?.id) return; setUsers((us) => us.filter((u) => u.id !== id)); };
   const resetUserPassword = (id, newPw) => { if (!newPw) return; setUsers((us) => us.map((u) => u.id === id ? { ...u, password: newPw } : u)); };
@@ -509,12 +497,12 @@ export default function AgencyPM() {
 
   // ---------- App state (post-login) ----------
   return <Dashboard currentUser={currentUser} isAdmin={isAdmin} onLogout={handleLogout}
-    users={users} addUser={addUser} toggleUserActive={toggleUserActive} deleteUser={deleteUser}
+    users={users} setUsers={setUsers} toggleUserActive={toggleUserActive} deleteUser={deleteUser}
     resetUserPassword={resetUserPassword} updateUserClients={updateUserClients}
     company={company} setCompany={setCompany} />;
 }
 
-function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserActive, deleteUser, resetUserPassword, updateUserClients, company, setCompany }) {
+function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUserActive, deleteUser, resetUserPassword, updateUserClients, company, setCompany }) {
   const [view, setView] = useState("overview");
   const [openProjectId, setOpenProjectId] = useState(null);
   const [projTab, setProjTab] = useState("budget");
@@ -536,7 +524,20 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, addUser, toggleUserA
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
-  const [taskAdded, setTaskAdded] = useState(0); // counts tasks added in current modal session
+  const [taskAdded, setTaskAdded] = useState(0);
+
+  const addUser = () => {
+    if (!form.username || !form.password || !form.name) return;
+    if (users.some((u) => u.username.toLowerCase() === form.username.toLowerCase())) {
+      alert("Username already taken."); return;
+    }
+    setUsers((us) => [...us, {
+      id: uid(), username: form.username, password: form.password,
+      name: form.name, role: form.role || "Staff", active: true,
+      allowedClients: form.allowedClients || [],
+    }]);
+    setModal(null);
+  };
   // ---------- Storage sync ----------
   const [loaded, setLoaded] = useState(false);
   const [storageMode, setStorageMode] = useState("none"); // claude | local | none
