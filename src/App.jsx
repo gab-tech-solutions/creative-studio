@@ -4,8 +4,9 @@ import {
   CalendarDays, CircleDollarSign, Briefcase, Clock, X, Trash2, Megaphone,
   MapPin, Truck, HardHat, ClipboardCheck, BarChart3, FolderKanban, CheckCircle2, Circle,
   Cloud, CloudOff, RotateCcw, Receipt, Send, Zap, Lock, UserPlus, LogOut, Shield, Eye, EyeOff,
-  Paperclip, Link2, History, Layers, ExternalLink, FileText, AlertTriangle
+  Paperclip, Link2, History, Layers, ExternalLink, FileText, AlertTriangle, Download
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // ---------- Design tokens ----------
 const T = {
@@ -650,7 +651,90 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
     setActivityLog((log) => [{
       id: uid(), ts: new Date().toISOString(), userId: currentUser.id,
       action, detail: detail || "", projectId: projectId || "",
-    }, ...log].slice(0, 200)); // keep last 200 entries
+    }, ...log].slice(0, 200));
+  };
+
+  // ---------- Export to Excel ----------
+  const exportToExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const cName = (cid) => clientById(cid)?.name || "";
+    const pName = (pid) => projectById(pid)?.name || "";
+    const uName = (uid) => users.find((u) => u.id === uid)?.name || "";
+
+    // Clients
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clients.map((c) => ({
+      Name: c.name, Industry: c.industry, "Retainer (₱/mo)": c.retainer, Email: c.email || "",
+    }))), "Clients");
+
+    // Projects
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(projects.map((p) => ({
+      Name: p.name, Client: cName(p.clientId), Type: p.type, Service: p.service,
+      "Budget (₱)": p.budget, Due: p.due, Venue: p.venue || "", "Start date": p.startDate || "", "End date": p.endDate || "",
+      "Attendance": p.report?.attendance || "", "Samples": p.report?.samples || "", "Leads": p.report?.leads || "", "Report notes": p.report?.notes || "",
+    }))), "Projects");
+
+    // Tasks
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tasks.map((t) => ({
+      Task: t.title, Project: pName(t.projectId), Client: cName(projectById(t.projectId)?.clientId),
+      Assignee: team.find((m) => m.id === t.assignee)?.name || "", Status: t.status, Due: t.due,
+    }))), "Tasks");
+
+    // Budget items
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(budgetItems.map((b) => ({
+      Project: pName(b.projectId), Category: b.category, "Line item": b.label,
+      "Planned (₱)": b.planned, "Actual (₱)": b.actual, "Variance (₱)": b.planned - b.actual,
+    }))), "Budget");
+
+    // Vendors
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vendors.map((v) => ({
+      Vendor: v.name, Project: pName(v.projectId), Service: v.service,
+      "Quote (₱)": v.quote, Status: v.status,
+    }))), "Vendors");
+
+    // Manpower
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(manpower.map((m) => ({
+      Name: m.name, Project: pName(m.projectId), Role: m.role,
+      "Rate/day (₱)": m.rate, "Call time": m.callTime, Status: m.status,
+    }))), "Manpower");
+
+    // Checklist
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(checklist.map((c) => ({
+      Project: pName(c.projectId), Group: c.group, Item: c.label, Done: c.done ? "Yes" : "No",
+    }))), "Checklist");
+
+    // Invoices
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invoices.map((i) => ({
+      "Invoice #": i.number, Client: cName(i.clientId), Project: i.projectId ? pName(i.projectId) : "",
+      Description: i.desc, "Amount (₱)": i.amount, "Issue date": i.issueDate, "Due date": i.dueDate, Status: i.status,
+    }))), "Invoices");
+
+    // Campaigns
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(campaigns.map((c) => ({
+      Campaign: c.name, Client: cName(c.clientId), "# of legs": c.projectIds.length,
+      Legs: c.projectIds.map((pid) => pName(pid)).join(", "), Notes: c.notes,
+    }))), "Campaigns");
+
+    // Attachments
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(attachments.map((a) => ({
+      Label: a.label, Project: pName(a.projectId), Type: a.type, URL: a.url,
+      "Added by": uName(a.addedBy), "Date added": a.addedAt,
+    }))), "Attachments");
+
+    // Activity log
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(activityLog.map((l) => ({
+      Timestamp: new Date(l.ts).toLocaleString(), User: uName(l.userId),
+      Action: l.action, Detail: l.detail, Project: l.projectId ? pName(l.projectId) : "",
+    }))), "Activity log");
+
+    // Users (no passwords)
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(users.map((u) => ({
+      Name: u.name, Username: u.username, Role: u.role, Active: u.active ? "Yes" : "No",
+      "Client access": (u.allowedClients || []).length === 0 ? "All" : (u.allowedClients || []).map((cid) => cName(cid)).join(", "),
+    }))), "Users");
+
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `${company.name.replace(/[^a-zA-Z0-9]/g, "-")}-backup-${today}.xlsx`);
+    logActivity("Exported backup", "Full data export to Excel");
   };
 
   // ---------- Filtered data ----------
@@ -1924,6 +2008,15 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
                 : saveState === "error" ? "Save failed — retrying on next change"
                 : storageMode === "claude" ? "Saved · shared with your team" : "Saved on this device"}
             </div>
+            {isAdmin && (
+              <button onClick={exportToExcel} style={{
+                marginTop: 9, display: "inline-flex", alignItems: "center", gap: 6, width: "100%",
+                background: "rgba(64,56,239,0.12)", border: "1px solid rgba(64,56,239,0.3)", borderRadius: 7, padding: "6px 9px",
+                fontSize: 11, fontWeight: 700, color: "#A8A3FF", cursor: "pointer",
+              }}>
+                <Download size={12} /> Export backup (.xlsx)
+              </button>
+            )}
             <button onClick={resetAll} style={{
               marginTop: 9, display: "inline-flex", alignItems: "center", gap: 6,
               background: resetArm ? "rgba(252,165,165,0.15)" : "transparent",
