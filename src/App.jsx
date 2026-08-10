@@ -12,8 +12,8 @@ import * as XLSX from "xlsx";
 const T = {
   ink: "#1B1E2A",
   inkSoft: "#2A2E40",
-  paper: "#F3F5F8",
-  card: "#FFFFFF",
+  paper: "#E8ECF1",
+  card: "#F5F6F9",
   line: "#E3E7EE",
   accent: "#4038EF",
   accentSoft: "#ECEBFE",
@@ -157,50 +157,28 @@ const seedActivityLog = [
 
 const ATTACH_TYPES = ["design", "permit", "contract", "proposal", "report", "photo", "other"];
 
-// ---------- Persistent storage ----------
-// All board data is kept in ONE shared key so the whole team sees the same board.
-const STORAGE_KEY = "agency-pm:board:v1";
+// ---------- Persistent storage (Firebase Firestore) ----------
+// All board data syncs in real-time via Firestore — every team member sees
+// the same live board. Falls back to localStorage if Firebase isn't configured.
+import { db, BOARD_REF, USERS_REF, COMPANY_REF, setDoc, onSnapshot } from "./firebase.js";
 
-// Storage adapter:
-// - Inside Claude artifacts: uses window.storage (shared, whole team sees one board)
-// - Self-hosted (e.g. GitHub Pages): falls back to browser localStorage (saved per device)
-const detectStorageMode = () => {
-  if (typeof window === "undefined") return "none";
-  if (window.storage) return "claude";
-  try {
-    window.localStorage.setItem("__sb_test", "1");
-    window.localStorage.removeItem("__sb_test");
-    return "local";
-  } catch (e) {
-    return "none";
-  }
+const STORAGE_KEY = "agency-pm:board:v1";
+const AUTH_KEY = "agency-pm:users:v1";
+const COMPANY_KEY = "agency-pm:company:v1";
+
+const isFirebaseReady = () => {
+  try { return db && typeof db.type === "string"; } catch (e) { return false; }
 };
-const storageRead = async (mode) => {
-  if (mode === "claude") {
-    const res = await window.storage.get(STORAGE_KEY, true);
-    return res ? res.value : null;
-  }
-  if (mode === "local") return window.localStorage.getItem(STORAGE_KEY);
-  return null;
-};
-const storageWrite = async (mode, json) => {
-  if (mode === "claude") {
-    const res = await window.storage.set(STORAGE_KEY, json, true);
-    return !!res;
-  }
-  if (mode === "local") { window.localStorage.setItem(STORAGE_KEY, json); return true; }
-  return false;
-};
+
+// Local fallback (same as before, used when Firebase isn't configured)
+const localRead = (key) => { try { return window.localStorage.getItem(key); } catch (e) { return null; } };
+const localWrite = (key, json) => { try { window.localStorage.setItem(key, json); return true; } catch (e) { return false; } };
 const seedBundle = () => ({
   clients: seedClients, projects: seedProjects, tasks: seedTasks,
   budgetItems: seedBudgetItems, vendors: seedVendors, manpower: seedManpower, checklist: seedChecklist,
   invoices: seedInvoices, campaigns: seedCampaigns, attachments: seedAttachments, activityLog: seedActivityLog,
 });
 
-// ---------- Auth storage (separate key so board data stays clean) ----------
-const AUTH_KEY = "agency-pm:users:v1";
-const SESSION_KEY = "agency-pm:session";
-const COMPANY_KEY = "agency-pm:company:v1";
 const ROLES = ["Admin", "Manager", "Staff", "Client"];
 
 const seedUsers = [
@@ -216,31 +194,9 @@ const seedCompany = {
   website: "www.creativestudio.example",
 };
 
-const authRead = async (mode) => {
-  if (mode === "claude") {
-    try { const res = await window.storage.get(AUTH_KEY, true); return res ? res.value : null; } catch (e) { return null; }
-  }
-  if (mode === "local") return window.localStorage.getItem(AUTH_KEY);
-  return null;
-};
-const authWrite = async (mode, json) => {
-  if (mode === "claude") { try { await window.storage.set(AUTH_KEY, json, true); return true; } catch (e) { return false; } }
-  if (mode === "local") { window.localStorage.setItem(AUTH_KEY, json); return true; }
-  return false;
-};
-const sessionRead = () => { try { return JSON.parse(window.sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } };
-const sessionWrite = (user) => { try { window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch (e) {} };
-const sessionClear = () => { try { window.sessionStorage.removeItem(SESSION_KEY); } catch (e) {} };
-const companyRead = async (mode) => {
-  if (mode === "claude") { try { const res = await window.storage.get(COMPANY_KEY, true); return res ? res.value : null; } catch (e) { return null; } }
-  if (mode === "local") return window.localStorage.getItem(COMPANY_KEY);
-  return null;
-};
-const companyWrite = async (mode, json) => {
-  if (mode === "claude") { try { await window.storage.set(COMPANY_KEY, json, true); return true; } catch (e) { return false; } }
-  if (mode === "local") { window.localStorage.setItem(COMPANY_KEY, json); return true; }
-  return false;
-};
+const sessionRead = () => { try { return JSON.parse(window.sessionStorage.getItem("agency-pm:session")); } catch (e) { return null; } };
+const sessionWrite = (user) => { try { window.sessionStorage.setItem("agency-pm:session", JSON.stringify(user)); } catch (e) {} };
+const sessionClear = () => { try { window.sessionStorage.removeItem("agency-pm:session"); } catch (e) {} };
 
 // ---------- Login page ----------
 const LoginPage = ({ onLogin, error, company }) => {
@@ -422,50 +378,50 @@ const Modal = ({ title, onClose, children }) => (
 // ---------- Main app ----------
 export default function AgencyPM() {
   // ---------- Auth ----------
-  const [currentUser, setCurrentUser] = useState(null); // logged-in user object
+  const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState(seedUsers);
   const [company, setCompany] = useState(seedCompany);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [authStorageMode, setAuthStorageMode] = useState("none");
+  const useFirebase = isFirebaseReady();
 
-  // Load users + company from storage on mount, restore session
+  // Load users + company, restore session
   useEffect(() => {
-    (async () => {
-      const mode = detectStorageMode();
-      setAuthStorageMode(mode);
-      if (mode !== "none") {
-        try {
-          const raw = await authRead(mode);
-          if (raw) setUsers(JSON.parse(raw));
-          else await authWrite(mode, JSON.stringify(seedUsers));
-        } catch (e) {
-          try { await authWrite(mode, JSON.stringify(seedUsers)); } catch (e2) {}
-        }
-        try {
-          const cRaw = await companyRead(mode);
-          if (cRaw) setCompany(JSON.parse(cRaw));
-          else await companyWrite(mode, JSON.stringify(seedCompany));
-        } catch (e) {}
-      }
-      // Restore session
-      const sess = sessionRead();
-      if (sess) setCurrentUser(sess);
+    if (useFirebase) {
+      // Real-time listeners for users and company from Firestore
+      const unsubUsers = onSnapshot(USERS_REF, (snap) => {
+        if (snap.exists()) setUsers(snap.data().list || seedUsers);
+        else setDoc(USERS_REF, { list: seedUsers });
+        setAuthLoaded(true);
+      }, () => { setAuthLoaded(true); });
+      const unsubCompany = onSnapshot(COMPANY_REF, (snap) => {
+        if (snap.exists()) setCompany(snap.data());
+        else setDoc(COMPANY_REF, seedCompany);
+      });
+      const sess = sessionRead(); if (sess) setCurrentUser(sess);
+      return () => { unsubUsers(); unsubCompany(); };
+    } else {
+      // localStorage fallback
+      const rawU = localRead(AUTH_KEY); if (rawU) setUsers(JSON.parse(rawU)); else localWrite(AUTH_KEY, JSON.stringify(seedUsers));
+      const rawC = localRead(COMPANY_KEY); if (rawC) setCompany(JSON.parse(rawC)); else localWrite(COMPANY_KEY, JSON.stringify(seedCompany));
+      const sess = sessionRead(); if (sess) setCurrentUser(sess);
       setAuthLoaded(true);
-    })();
+    }
   }, []);
 
   // Save users whenever they change
   useEffect(() => {
-    if (!authLoaded || authStorageMode === "none") return;
-    authWrite(authStorageMode, JSON.stringify(users));
-  }, [users, authLoaded, authStorageMode]);
+    if (!authLoaded) return;
+    if (useFirebase) setDoc(USERS_REF, { list: users }).catch(console.error);
+    else localWrite(AUTH_KEY, JSON.stringify(users));
+  }, [users, authLoaded]);
 
   // Save company whenever it changes
   useEffect(() => {
-    if (!authLoaded || authStorageMode === "none") return;
-    companyWrite(authStorageMode, JSON.stringify(company));
-  }, [company, authLoaded, authStorageMode]);
+    if (!authLoaded) return;
+    if (useFirebase) setDoc(COMPANY_REF, company).catch(console.error);
+    else localWrite(COMPANY_KEY, JSON.stringify(company));
+  }, [company, authLoaded]);
 
   const handleLogin = (username, password) => {
     const u = users.find((x) => x.username.toLowerCase() === username.toLowerCase() && x.password === password && x.active);
@@ -477,15 +433,12 @@ export default function AgencyPM() {
   };
 
   const handleLogout = () => { setCurrentUser(null); sessionClear(); };
-
   const isAdmin = currentUser?.role === "Admin";
-
   const toggleUserActive = (id) => setUsers((us) => us.map((u) => u.id === id ? { ...u, active: !u.active } : u));
   const deleteUser = (id) => { if (id === currentUser?.id) return; setUsers((us) => us.filter((u) => u.id !== id)); };
   const resetUserPassword = (id, newPw) => { if (!newPw) return; setUsers((us) => us.map((u) => u.id === id ? { ...u, password: newPw } : u)); };
   const updateUserClients = (id, clientIds) => setUsers((us) => us.map((u) => u.id === id ? { ...u, allowedClients: clientIds } : u));
 
-  // Show login before anything else
   if (!authLoaded) {
     return (
       <div style={{ minHeight: "100vh", background: "#1B1E2A", display: "flex", alignItems: "center", justifyContent: "center",
@@ -496,14 +449,13 @@ export default function AgencyPM() {
   }
   if (!currentUser) return <LoginPage onLogin={handleLogin} error={authError} company={company} />;
 
-  // ---------- App state (post-login) ----------
   return <Dashboard currentUser={currentUser} isAdmin={isAdmin} onLogout={handleLogout}
     users={users} setUsers={setUsers} toggleUserActive={toggleUserActive} deleteUser={deleteUser}
     resetUserPassword={resetUserPassword} updateUserClients={updateUserClients}
-    company={company} setCompany={setCompany} />;
+    company={company} setCompany={setCompany} useFirebase={useFirebase} />;
 }
 
-function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUserActive, deleteUser, resetUserPassword, updateUserClients, company, setCompany }) {
+function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUserActive, deleteUser, resetUserPassword, updateUserClients, company, setCompany, useFirebase }) {
   const [view, setView] = useState("overview");
   const [openProjectId, setOpenProjectId] = useState(null);
   const [projTab, setProjTab] = useState("budget");
@@ -539,12 +491,13 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
     }]);
     setModal(null);
   };
-  // ---------- Storage sync ----------
+
+  // ---------- Storage sync (Firebase with localStorage fallback) ----------
   const [loaded, setLoaded] = useState(false);
-  const [storageMode, setStorageMode] = useState("none"); // claude | local | none
-  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const [saveState, setSaveState] = useState("idle");
   const [resetArm, setResetArm] = useState(false);
   const saveTimer = useRef(null);
+  const skipNextSave = useRef(false); // prevent echo when onSnapshot fires
 
   const applyBundle = (d) => {
     if (d.clients) setClients(d.clients);
@@ -560,46 +513,39 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
     if (d.activityLog) setActivityLog(d.activityLog);
   };
 
+  const getBundle = () => ({ clients, projects, tasks, budgetItems, vendors, manpower, checklist, invoices, campaigns, attachments, activityLog });
+
   useEffect(() => {
-    (async () => {
-      const mode = detectStorageMode();
-      setStorageMode(mode);
-      if (mode === "none") { setLoaded(true); return; } // no storage available — in-memory only
-      try {
-        const raw = await storageRead(mode);
-        if (raw) applyBundle(JSON.parse(raw));
-        else await storageWrite(mode, JSON.stringify(seedBundle())); // first run — seed the board
-      } catch (err) {
-        // e.g. Claude storage throws on a missing key — treat as first run
-        try {
-          await storageWrite(mode, JSON.stringify(seedBundle()));
-        } catch (e2) {
-          console.error("Storage unavailable:", e2);
-          setStorageMode("none");
-        }
-      }
+    if (useFirebase) {
+      // Real-time listener — everyone on the team sees changes live
+      const unsub = onSnapshot(BOARD_REF, (snap) => {
+        if (snap.exists()) { skipNextSave.current = true; applyBundle(snap.data()); }
+        else setDoc(BOARD_REF, seedBundle());
+        setLoaded(true);
+      }, (err) => { console.error("Firestore listen error:", err); setLoaded(true); });
+      return () => unsub();
+    } else {
+      const raw = localRead(STORAGE_KEY);
+      if (raw) applyBundle(JSON.parse(raw)); else localWrite(STORAGE_KEY, JSON.stringify(seedBundle()));
       setLoaded(true);
-    })();
+    }
   }, []);
 
   useEffect(() => {
-    if (!loaded || storageMode === "none") return;
+    if (!loaded) return;
+    if (skipNextSave.current) { skipNextSave.current = false; return; }
     setSaveState("saving");
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
-        const ok = await storageWrite(storageMode, JSON.stringify({
-          clients, projects, tasks, budgetItems, vendors, manpower, checklist, invoices,
-          campaigns, attachments, activityLog,
-        }));
-        setSaveState(ok ? "saved" : "error");
-      } catch (err) {
-        console.error("Save failed:", err);
-        setSaveState("error");
-      }
+        const bundle = getBundle();
+        if (useFirebase) { await setDoc(BOARD_REF, bundle); skipNextSave.current = true; }
+        else localWrite(STORAGE_KEY, JSON.stringify(bundle));
+        setSaveState("saved");
+      } catch (err) { console.error("Save failed:", err); setSaveState("error"); }
     }, 800);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [clients, projects, tasks, budgetItems, vendors, manpower, checklist, invoices, campaigns, attachments, activityLog, loaded, storageMode]);
+  }, [clients, projects, tasks, budgetItems, vendors, manpower, checklist, invoices, campaigns, attachments, activityLog, loaded]);
 
   const resetAll = async () => {
     if (!resetArm) { setResetArm(true); setTimeout(() => setResetArm(false), 4000); return; }
@@ -607,9 +553,10 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
     const fresh = seedBundle();
     applyBundle(fresh);
     setOpenProjectId(null);
-    if (storageMode !== "none") {
-      try { await storageWrite(storageMode, JSON.stringify(fresh)); } catch (e) { console.error(e); }
-    }
+    try {
+      if (useFirebase) await setDoc(BOARD_REF, fresh);
+      else localWrite(STORAGE_KEY, JSON.stringify(fresh));
+    } catch (e) { console.error(e); }
   };
   const openModal = (kind, preset = {}) => { setForm(preset); setModal(kind); setTaskAdded(0); };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -2000,13 +1947,11 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
             </div>
           ))}
           <div style={{ marginTop: 6, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11.5, fontWeight: 700, color: storageMode !== "none" ? (saveState === "error" ? "#FCA5A5" : "#8DE0A8") : "#C9CEDB" }}>
-              {storageMode !== "none" ? <Cloud size={13} /> : <CloudOff size={13} />}
-              {storageMode === "none"
-                ? "Preview mode — changes not saved"
-                : saveState === "saving" ? "Saving…"
-                : saveState === "error" ? "Save failed — retrying on next change"
-                : storageMode === "claude" ? "Saved · shared with your team" : "Saved on this device"}
+            <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11.5, fontWeight: 700, color: saveState === "error" ? "#FCA5A5" : "#8DE0A8" }}>
+              <Cloud size={13} />
+              {saveState === "saving" ? "Syncing…"
+                : saveState === "error" ? "Sync failed — retrying"
+                : useFirebase ? "Live · synced with your team" : "Saved on this device"}
             </div>
             {isAdmin && (
               <button onClick={exportToExcel} style={{
