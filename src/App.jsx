@@ -10,17 +10,17 @@ import * as XLSX from "xlsx";
 
 // ---------- Design tokens ----------
 const T = {
-  ink: "#1B1E2A",
-  inkSoft: "#2A2E40",
-  paper: "#E8ECF1",
-  card: "#F5F6F9",
-  line: "#E3E7EE",
-  accent: "#4038EF",
-  accentSoft: "#ECEBFE",
+  ink: "#E8ECF1",
+  inkSoft: "#A0A8B8",
+  paper: "#0F1117",
+  card: "#1A1D28",
+  line: "#2A2E3C",
+  accent: "#6C63FF",
+  accentSoft: "#1E1B3A",
   textDim: "#6B7180",
-  green: "#16A34A",
-  amber: "#B45309",
-  red: "#B91C1C",
+  green: "#22C55E",
+  amber: "#F59E0B",
+  red: "#EF4444",
 };
 
 const CLIENT_COLORS = ["#FF6B5E", "#FFB020", "#12B5A5", "#8B5CF6", "#3B82F6", "#EC4899"];
@@ -206,7 +206,7 @@ const LoginPage = ({ onLogin, error, company }) => {
   const handleSubmit = (e) => { e.preventDefault(); onLogin(username, password); };
   return (
     <div style={{
-      minHeight: "100vh", background: "linear-gradient(145deg, #1B1E2A 0%, #2D3250 100%)",
+      minHeight: "100vh", background: "linear-gradient(145deg, #080A10 0%, #141722 100%)",
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
       fontFamily: "'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif",
     }}>
@@ -222,15 +222,15 @@ const LoginPage = ({ onLogin, error, company }) => {
           <p style={{ margin: "6px 0 0", fontSize: 14, color: "#8A90A4" }}>{company.tagline || "Agency Project Management"}</p>
         </div>
         <div style={{
-          background: "#fff", borderRadius: 16, padding: 28,
+          background: "#1A1D28", borderRadius: 16, padding: 28,
           boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 20 }}>
-            <Lock size={18} color="#4038EF" />
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#1B1E2A" }}>Sign in</h2>
+            <Lock size={18} color="#6C63FF" />
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#E8ECF1" }}>Sign in</h2>
           </div>
           {error && (
-            <div style={{ padding: "9px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#B91C1C", marginBottom: 14 }}>
+            <div style={{ padding: "9px 12px", background: "#2A1215", border: "1px solid #7F1D1D", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#EF4444", marginBottom: 14 }}>
               {error}
             </div>
           )}
@@ -240,7 +240,7 @@ const LoginPage = ({ onLogin, error, company }) => {
               <input value={username} onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your username" autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
-                style={{ width: "100%", boxSizing: "border-box", padding: "11px 14px", fontSize: 14, border: "1px solid #E3E7EE", borderRadius: 9, outline: "none", background: "#FBFCFE", color: "#1B1E2A" }} />
+                style={{ width: "100%", boxSizing: "border-box", padding: "11px 14px", fontSize: 14, border: "1px solid #2A2E3C", borderRadius: 9, outline: "none", background: "#141722", color: "#E8ECF1" }} />
             </div>
             <div>
               <label style={{ fontSize: 11.5, fontWeight: 700, color: "#6B7180", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.6 }}>Password</label>
@@ -248,7 +248,7 @@ const LoginPage = ({ onLogin, error, company }) => {
                 <input value={password} onChange={(e) => setPassword(e.target.value)}
                   type={showPw ? "text" : "password"} placeholder="Enter your password"
                   onKeyDown={(e) => e.key === "Enter" && handleSubmit(e)}
-                  style={{ width: "100%", boxSizing: "border-box", padding: "11px 40px 11px 14px", fontSize: 14, border: "1px solid #E3E7EE", borderRadius: 9, outline: "none", background: "#FBFCFE", color: "#1B1E2A" }} />
+                  style={{ width: "100%", boxSizing: "border-box", padding: "11px 40px 11px 14px", fontSize: 14, border: "1px solid #2A2E3C", borderRadius: 9, outline: "none", background: "#141722", color: "#E8ECF1" }} />
                 <button onClick={() => setShowPw(!showPw)} style={{
                   position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
                   background: "none", border: "none", cursor: "pointer", color: "#6B7180", display: "flex", padding: 4,
@@ -260,7 +260,7 @@ const LoginPage = ({ onLogin, error, company }) => {
               padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4,
             }}>Sign in</button>
           </div>
-          <div style={{ marginTop: 16, padding: "10px 12px", background: "#F3F5F8", borderRadius: 9, fontSize: 12, color: "#6B7180" }}>
+          <div style={{ marginTop: 16, padding: "10px 12px", background: "#141722", borderRadius: 9, fontSize: 12, color: "#6B7180" }}>
             <b>Default login:</b> admin / admin123
           </div>
         </div>
@@ -286,7 +286,7 @@ const initials = (name) => name.split(" ").map((w) => w[0]).slice(0, 2).join("")
 // ---------- Shared styles ----------
 const inputStyle = {
   width: "100%", boxSizing: "border-box", padding: "9px 12px", fontSize: 14,
-  border: `1px solid ${T.line}`, borderRadius: 9, outline: "none", background: "#FBFCFE", color: T.ink,
+  border: `1px solid ${T.line}`, borderRadius: 9, outline: "none", background: "#141722", color: T.ink,
 };
 const labelStyle = { fontSize: 11.5, fontWeight: 700, color: T.textDim, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.6 };
 const btnPrimary = {
@@ -339,7 +339,7 @@ const DueTag = ({ due }) => {
 const Chip = ({ color, children }) => (
   <span style={{
     display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600,
-    color: T.ink, background: "#F0F2F6", border: `1px solid ${T.line}`, borderRadius: 999, padding: "3px 10px",
+    color: T.ink, background: "#252836", border: `1px solid ${T.line}`, borderRadius: 999, padding: "3px 10px",
   }}>
     {color && <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />}
     {children}
@@ -363,7 +363,7 @@ const Modal = ({ title, onClose, children }) => (
     display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
   }}>
     <div onClick={(e) => e.stopPropagation()} style={{
-      background: "#fff", borderRadius: 14, width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto",
+      background: "#1A1D28", borderRadius: 14, width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto",
       padding: 22, boxShadow: "0 24px 60px rgba(20,22,32,0.25)",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -441,7 +441,7 @@ export default function AgencyPM() {
 
   if (!authLoaded) {
     return (
-      <div style={{ minHeight: "100vh", background: "#1B1E2A", display: "flex", alignItems: "center", justifyContent: "center",
+      <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center",
         fontFamily: "'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif" }}>
         <div style={{ color: "#8A90A4", fontSize: 14, fontWeight: 700 }}>Loading…</div>
       </div>
@@ -997,7 +997,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
                   <span style={{ fontWeight: 700 }}>{p.name}</span>
                   <span style={{ color: T.textDim }}>{money(b.actual)} / {money(b.planned)}</span>
                 </div>
-                <div style={{ height: 6, borderRadius: 4, background: "#EDF0F4", marginTop: 8 }}>
+                <div style={{ height: 6, borderRadius: 4, background: "#252836", marginTop: 8 }}>
                   <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, borderRadius: 4, background: pct > 100 ? T.red : pct > 85 ? "#F59E0B" : T.green, transition: "width .3s" }} />
                 </div>
                 <div style={{ fontSize: 11.5, color: T.textDim, marginTop: 5 }}>
@@ -1021,7 +1021,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <span style={{ width: 9, height: 9, borderRadius: "50%", background: s.color }} />
               <span style={{ fontWeight: 800, fontSize: 13, textTransform: "uppercase", letterSpacing: 0.6 }}>{s.label}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.textDim, background: "#EDF0F4", borderRadius: 999, padding: "1px 8px" }}>{col.length}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.textDim, background: "#252836", borderRadius: 999, padding: "1px 8px" }}>{col.length}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {col.length === 0 && <div style={{ border: `1.5px dashed ${T.line}`, borderRadius: 12, padding: 14, fontSize: 12.5, color: T.textDim, textAlign: "center" }}>No tasks here</div>}
@@ -1077,7 +1077,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
                   <MapPin size={12} /> {p.venue || "Venue TBD"} · {fmtDate(p.startDate)}{p.endDate && p.endDate !== p.startDate ? `–${fmtDate(p.endDate)}` : ""}
                 </div>
               )}
-              <div style={{ height: 5, borderRadius: 4, background: "#EDF0F4", marginTop: 12 }}>
+              <div style={{ height: 5, borderRadius: 4, background: "#252836", marginTop: 12 }}>
                 <div style={{ height: "100%", width: `${prog}%`, borderRadius: 4, background: prog === 100 ? T.green : T.accent }} />
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.textDim, marginTop: 6 }}>
@@ -1096,7 +1096,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
     <button onClick={() => setProjTab(id)} style={{
       display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 13px", fontSize: 13, fontWeight: 700,
       border: "none", borderRadius: 9, cursor: "pointer",
-      background: projTab === id ? T.ink : "transparent", color: projTab === id ? "#fff" : T.textDim,
+      background: projTab === id ? "#2D3148" : "transparent", color: projTab === id ? "#fff" : T.textDim,
     }}>
       <Icon size={14} /> {label}
       {count !== undefined && <span style={{ fontSize: 11, fontWeight: 800, background: projTab === id ? "rgba(255,255,255,0.2)" : "#EDF0F4", borderRadius: 999, padding: "1px 7px" }}>{count}</span>}
@@ -1435,7 +1435,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
         );
       })}
       <button onClick={() => openModal("client")} style={{
-        border: "1.5px dashed #C7CDD8", borderRadius: 14, background: "transparent", cursor: "pointer",
+        border: "1.5px dashed #3A3F50", borderRadius: 14, background: "transparent", cursor: "pointer",
         minHeight: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         gap: 8, color: T.textDim, fontSize: 13.5, fontWeight: 700,
       }}>
@@ -1617,7 +1617,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
                           <div style={{ fontSize: 12, color: T.textDim }}>{p.venue || p.service} · {fmtDate(p.startDate || p.due)}</div>
                         </div>
                         <div style={{ width: 80 }}>
-                          <div style={{ height: 5, borderRadius: 4, background: "#EDF0F4" }}><div style={{ height: "100%", width: `${prog}%`, borderRadius: 4, background: prog === 100 ? T.green : T.accent }} /></div>
+                          <div style={{ height: 5, borderRadius: 4, background: "#252836" }}><div style={{ height: "100%", width: `${prog}%`, borderRadius: 4, background: prog === 100 ? T.green : T.accent }} /></div>
                           <div style={{ fontSize: 11, color: T.textDim, textAlign: "right", marginTop: 2 }}>{prog}%</div>
                         </div>
                       </div>
@@ -1670,7 +1670,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 800 }}>{prog}% complete</div>
                 </div>
-                <div style={{ height: 6, borderRadius: 4, background: "#EDF0F4", marginTop: 12 }}>
+                <div style={{ height: 6, borderRadius: 4, background: "#252836", marginTop: 12 }}>
                   <div style={{ height: "100%", width: `${prog}%`, borderRadius: 4, background: prog === 100 ? T.green : T.accent }} />
                 </div>
                 {/* Tasks summary */}
@@ -1828,7 +1828,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
                       </div>
                     )}
                     {editingUserClients === u.id && u.role !== "Admin" && (
-                      <div style={{ marginTop: 8, padding: "10px 12px", background: "#F9FAFB", borderRadius: 9, border: `1px solid ${T.line}` }}>
+                      <div style={{ marginTop: 8, padding: "10px 12px", background: "#141722", borderRadius: 9, border: `1px solid ${T.line}` }}>
                         <div style={{ fontSize: 11.5, fontWeight: 700, color: T.textDim, marginBottom: 6 }}>
                           Select which clients this user can access. Leave all unchecked for full access.
                         </div>
@@ -1911,7 +1911,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: T.paper, fontFamily: "'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif", color: T.ink }}>
       {/* Sidebar */}
-      <aside style={{ width: 208, background: T.ink, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+      <aside style={{ width: 208, background: "#0A0C12", padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 8px 18px" }}>
           <div style={{ width: 30, height: 30, borderRadius: 9, background: T.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Megaphone size={16} color="#fff" />
@@ -1997,9 +1997,9 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
             <div style={{ flex: 1 }} />
             <div style={{ position: "relative" }}>
               <Search size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: T.textDim }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" style={{ ...inputStyle, width: 170, paddingLeft: 32, background: "#fff" }} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" style={{ ...inputStyle, width: 170, paddingLeft: 32, background: "#1A1D28" }} />
             </div>
-            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} style={{ ...inputStyle, width: "auto", background: "#fff" }}>
+            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} style={{ ...inputStyle, width: "auto", background: "#1A1D28" }}>
               <option value="all">All clients</option>
               {accessibleClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -2068,7 +2068,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
         <Modal title="New task" onClose={() => { setModal(null); setTaskAdded(0); }}>
           {form._saved ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "20px 0" }}>
-              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#0F2918", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <CheckCircle2 size={28} color="#16A34A" />
               </div>
               <div style={{ textAlign: "center" }}>
@@ -2090,7 +2090,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
               {taskAdded > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#15803D" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#0F2918", border: "1px solid #166534", borderRadius: 9, fontSize: 13, fontWeight: 600, color: "#22C55E" }}>
                   <CheckCircle2 size={15} /> {taskAdded} task{taskAdded > 1 ? "s" : ""} added so far
                 </div>
               )}
@@ -2246,7 +2246,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
             {(form.role || "Staff") !== "Admin" && (
               <div>
                 <label style={labelStyle}>Restrict to specific clients (optional)</label>
-                <div style={{ padding: "8px 12px", background: "#F9FAFB", borderRadius: 9, border: `1px solid ${T.line}` }}>
+                <div style={{ padding: "8px 12px", background: "#141722", borderRadius: 9, border: `1px solid ${T.line}` }}>
                   {clients.map((c) => (
                     <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer", fontSize: 13 }}>
                       <input type="checkbox" checked={(form.allowedClients || []).includes(c.id)}
@@ -2307,7 +2307,7 @@ function Dashboard({ currentUser, isAdmin, onLogout, users, setUsers, toggleUser
             {form.clientId && (
               <div>
                 <label style={labelStyle}>Include projects (legs)</label>
-                <div style={{ padding: "8px 12px", background: "#F9FAFB", borderRadius: 9, border: `1px solid ${T.line}` }}>
+                <div style={{ padding: "8px 12px", background: "#141722", borderRadius: 9, border: `1px solid ${T.line}` }}>
                   {projects.filter((p) => p.clientId === form.clientId).map((p) => (
                     <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer", fontSize: 13 }}>
                       <input type="checkbox" checked={(form.campaignProjectIds || []).includes(p.id)}
