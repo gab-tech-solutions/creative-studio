@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only allow access from your app's domain.
+    // Firestore checks the Firebase Auth token or app check —
+    // since we use app-level auth (not Firebase Auth), we restrict
+    // by requiring a known app structure in the data.
+    
+    // Board data — readable and writable by anyone with the URL
+    // (your app handles role-based access in the UI).
+    // To lock further, enable Firebase App Check in the console.
+    match /boards/{boardId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAny(['clients', 'projects', 'tasks']);
+    }
+    
+    // User profiles and company config
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data != null;
+    }
+    
+    // Block everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
