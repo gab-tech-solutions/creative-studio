@@ -182,7 +182,7 @@ const seedBundle = () => ({
 const ROLES = ["Admin", "Manager", "Staff", "Client"];
 
 const seedUsers = [
-  { id: "u0", username: "admin", password: "admin123", name: "Admin", role: "Admin", active: true, allowedClients: [] },
+  { id: "u0", username: "admin", password: "Cr3ativeStudi0!", name: "Admin", role: "Admin", active: true, allowedClients: [] },
 ];
 
 const seedCompany = {
@@ -261,7 +261,7 @@ const LoginPage = ({ onLogin, error, company }) => {
             }}>Sign in</button>
           </div>
           <div style={{ marginTop: 16, padding: "10px 12px", background: "#141722", borderRadius: 9, fontSize: 12, color: "#6B7180" }}>
-            <b>Default login:</b> admin / admin123
+            Contact your administrator if you don't have an account yet.
           </div>
         </div>
       </div>
